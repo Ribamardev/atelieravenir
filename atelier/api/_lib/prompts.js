@@ -46,10 +46,10 @@ export function buildPostPrompt({ refPrompt, temPessoa, comFoto, tema, especiali
       ? "Não mostre pessoas reconhecíveis. Onde a referência tem uma pessoa, use um objeto simbólico ligado ao tema, mãos ou uma silhueta, mantendo a mesma composição."
       : "Não mostre pessoas reconhecíveis.");
   return [
-    "Crie a arte de um post de Instagram no formato vertical 4:5, recriando com fidelidade o ESTILO VISUAL descrito abaixo (tipografia, cores, composição, iluminação, texturas e elementos gráficos), mas com o conteúdo novo desta clínica.",
+    "Crie a arte de um post de Instagram no formato vertical 4:5 seguindo com fidelidade a DIREÇÃO DE ARTE abaixo (cenário, câmera, ângulo, composição, iluminação, texturas, elementos gráficos e tipografia), com o conteúdo desta clínica.",
     "",
-    "ESTILO DE REFERÊNCIA:",
-    clean(refPrompt, 3500),
+    "DIREÇÃO DE ARTE:",
+    clean(refPrompt, 6000),
     "",
     "CONTEÚDO DESTA ARTE (use exatamente estes textos):",
     `- Assunto: ${clean(tema, 160)} — clínica de ${clean(especialidade, 60) || "saúde"}.`,
@@ -59,6 +59,15 @@ export function buildPostPrompt({ refPrompt, temPessoa, comFoto, tema, especiali
     destaques.length ? `- Palavras de destaque (na cor de destaque, em caixa ou mais pesadas): ${destaques.map(d => `"${clean(d, 40)}"`).join(", ")}` : "",
     apoio ? `- Frase de apoio: "${clean(strip(apoio), 160)}"` : "",
     `- Cor de destaque da marca: ${clean(c1, 9)}. Cor secundária: ${clean(c2, 9)}. Use a cor de destaque onde a referência usa a cor forte.`,
+    "",
+    "TIPOGRAFIA (o mais importante — padrão de diretor de arte de agência premium):",
+    "- Letras de fonte digital profissional, desenhadas como vetor: bordas perfeitamente nítidas, traço uniforme, nenhuma letra torta, derretida, borrada, deformada ou com espessura irregular. A granulação, o ruído e o desfoque da foto NÃO passam por cima das letras.",
+    "- Título: sans-serif grotesca/geométrica display de alto padrão (no espírito de Neue Haas Grotesk Display Black, Gilroy Heavy ou Inter Display Black), caixa alta, kerning óptico apertado (tracking cerca de -3%), entrelinha bem fechada (cerca de 0,88), linhas com larguras parecidas formando um bloco compacto e equilibrado, ocupando cerca de 80% da largura da arte. Se o estilo de referência pedir outra família (serifada, itálica ou condensada), siga a referência com esse mesmo nível de acabamento. Nada de Arial, Impact, fonte padrão, fonte esticada ou condensada artificialmente.",
+    "- Frase de abertura: a MESMA família do título (ou a indicada na referência), peso fino (Light), em caixa baixa, com a palavra de destaque em peso Bold; tamanho cerca de 1/3 da altura das letras do título, alinhada pelo mesmo eixo do título e bem próxima dele.",
+    "- Palavras de destaque: mesma fonte e mesmo peso do resto da linha, só trocando a cor para a cor de destaque, cor chapada, sem brilho, sem sombra, sem contorno, sem degradê.",
+    "- Rótulos do topo: caixa alta pequena, peso Medium, espaçamento entre letras aberto (cerca de +12%), todos na mesma linha de base e com o mesmo tamanho.",
+    "- Hierarquia clara: título dominante, abertura secundária, rótulos discretos. Alinhamento e margens laterais iguais, espaçamentos consistentes, nada encostando nas bordas. Os acentos (É, Ã, Ç, Ó) desenhados corretamente e inteiros.",
+    "- O texto deve parecer diagramado no Figma/InDesign por um designer, nítido como impressão de alta resolução, não como texto gerado por IA.",
     "",
     "REGRAS:",
     "- Escreva os textos exatamente como estão acima, em português do Brasil, com todos os acentos corretos. Não acrescente nenhuma outra palavra, número, logotipo, @, assinatura ou marca d'água.",
@@ -73,3 +82,36 @@ export const REF_ANALYSIS_PROMPT = "Use essa imagem como referência e crie um p
   "Regras: o objetivo é recriar o ESTILO com conteúdo novo. Descreva tipografia (estilo das fontes, pesos, tamanhos relativos, caixa alta/baixa, cores, efeitos como caixas atrás de palavras, sublinhados, contornos), paleta, texturas, iluminação, lente, ângulo, composição e elementos gráficos. " +
   "Não identifique pessoas reais nem descreva traços de rosto específicos: chame a pessoa de 'a pessoa'. Troque marcas e logotipos por descrições genéricas e não copie os textos da referência; descreva apenas onde cada bloco de texto fica e como ele é. " +
   "Responda só com JSON: {\"prompt\":\"o prompt completo em português, organizado em CENÁRIO, CÂMERA, POSIÇÃO E ÂNGULO, DETALHES e POSTAGEM\",\"temPessoa\":true ou false,\"escuro\":true se o fundo predominante for escuro}";
+
+/* ---------- Diretor de arte: a IA escreve um prompt novo para cada post, tirando ideias das referências ---------- */
+export function directorPrompt({ catalog, base, recent, comFoto, tema, especialidade, topo, pre, titulo, apoio, c1, c2 }) {
+  const cat = catalog.map(r => `[${r.id}] ${r.nome}${r.pessoa ? " (tem pessoa)" : ""}${r.dark ? " (escuro)" : " (claro)"}\n${r.prompt}`).join("\n\n");
+  const guia = base
+    ? `REFERÊNCIA PRINCIPAL (escolhida pelo médico) — siga a direção de arte dela e, se quiser, empreste UM elemento de outra referência do catálogo:\n${clean(base, 3500)}`
+    : `Escolha no catálogo 1 referência PRINCIPAL que combine com o assunto e com o tom deste post, e até 2 referências SECUNDÁRIAS para emprestar elementos (uma textura, um elemento gráfico, um tratamento de foto ou de tipografia).${recent && recent.length ? ` Evite usar como principal as que saíram nos últimos posts: ${recent.join(", ")}.` : ""}${comFoto ? " O médico enviou uma foto dele: prefira referências com pessoa, onde ele será o protagonista." : " Não há foto do médico: prefira referências sem pessoa ou troque a pessoa por objetos, mãos ou cena ligada ao assunto."}`;
+  return [
+    "Você é diretor de arte de uma agência premium de marketing médico no Brasil. Escreva um prompt NOVO e exclusivo para uma ferramenta de geração de imagem (gpt-image) criar a arte de um post de Instagram 4:5.",
+    "O prompt tem que tirar a ideia das referências de mercado abaixo — mesmo nível de design, mesmo tipo de composição, tipografia, luz e acabamento — mas adaptado ao CONTEÚDO deste post: a cena, os objetos, o cenário e os elementos visuais devem ter relação direta com o assunto e a especialidade. Não é para copiar a referência: é para criar uma peça nova inspirada nela.",
+    "",
+    "CONTEÚDO DO POST:",
+    `- Especialidade: ${clean(especialidade, 60) || "saúde"}`,
+    `- Assunto: ${clean(tema, 200)}`,
+    (Array.isArray(topo) && topo.length) ? `- Rótulos do topo: ${topo.map(t => `"${clean(strip(t), 30)}"`).join(", ")}` : "",
+    pre ? `- Frase de abertura: "${clean(pre, 90)}" (palavras entre * são destaque)` : "",
+    `- Título: "${clean(titulo, 100)}" (palavras entre * são destaque)`,
+    apoio ? `- Frase de apoio: "${clean(apoio, 160)}"` : "",
+    `- Cores da marca: destaque ${clean(c1, 9)}, secundária ${clean(c2, 9)}`,
+    `- Foto do médico: ${comFoto ? "sim (a pessoa da imagem enviada será usada)" : "não"}`,
+    "",
+    guia,
+    "",
+    "COMO ESCREVER O PROMPT (em português, bem detalhado, nesta ordem):",
+    "CENÁRIO: ambiente, fundo, objetos e elementos ligados ao assunto. CÂMERA: tipo de lente, abertura, luz, granulação. POSIÇÃO E ÂNGULO: enquadramento, onde fica a pessoa ou o objeto principal, altura da câmera, pose. DETALHES: texturas, elementos gráficos, paleta usando as cores da marca. POSTAGEM: onde fica cada bloco de texto (rótulos, abertura, título, apoio), alinhamento, tamanhos relativos, família e peso das fontes, caixa alta/baixa, como as palavras de destaque são tratadas (cor, caixa atrás, sublinhado, itálico).",
+    "Regras: não invente outros textos além dos do conteúdo; deixe os 9% de baixo da arte só com fundo (lá entra a assinatura com CRM); nada de marcas, logotipos ou pessoas reais; nada de sangue, procedimentos invasivos, antes e depois, promessa de resultado ou sensacionalismo (regras do CFM). Se houver foto do médico, ele é a única pessoa da arte, com roupa profissional.",
+    "",
+    "CATÁLOGO DE REFERÊNCIAS DE MERCADO:",
+    cat,
+    "",
+    'Responda só com JSON: {"prompt":"o prompt completo","principal":"id da referência principal (ou \"propria\")","secundarias":["ids"],"pessoa":true se a arte mostra uma pessoa,"escuro":true se o fundo predominante for escuro}'
+  ].filter(x => x !== "").join("\n");
+}

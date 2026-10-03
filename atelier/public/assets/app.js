@@ -58,18 +58,19 @@ function defaults(){
   return {v:2, onboarded:false,
     profile:{nome:"",especialidade:"",cidade:"",medico:"",crm:"",rqe:"",servicos:"",publico:[],diferencial:"",tom:"",instagram:"",whatsapp:""},
     brand:{logo:"",cor1:"#0057F0",cor2:"#8FB4FF"},
-    favs: TEMPLATES.map(t=>t.id), fotoIds:[], cutouts:{}, customRefs:[],
+    favs: ["ref:auto"].concat(TEMPLATES.map(t=>t.id)), fotoIds:[], cutouts:{}, customRefs:[], autoAdded:true,
     estrategia:null, today:null, posts:[], counter:0, updatedAt:0};
 }
 /* Estilos com IA = referências de mercado (ref:rXX) e referências enviadas pelo cliente (cref:id) */
 const REFS = window.ATELIER_REFS || [];
 function refInfo(id){
   id = String(id||"");
+  if(id==="ref:auto") return {id, refId:"auto", auto:true, nome:"Criação livre com IA", pessoa:true, dark:true};
   if(id.startsWith("ref:")){ const r = REFS.find(x=>x.id===id.slice(4)); return r ? {id, refId:r.id, nome:r.nome, pessoa:!!r.pessoa, dark:!!r.dark, thumb:"/refs/"+r.id+".jpg"} : null; }
   if(id.startsWith("cref:")){ const r = ((typeof S!=="undefined" && S && S.customRefs) || []).find(x=>x.id===id.slice(5)); return r ? {id, custom:r, nome:r.nome||"Minha referência", pessoa:!!r.temPessoa, dark:!!r.escuro, path:r.path} : null; }
   return null;
 }
-function validStyle(id){ return TEMPLATES.some(t=>t.id===id) || /^ref:/.test(id) && !!refInfo(id) || /^cref:/.test(id); }
+function validStyle(id){ return id==="ref:auto" || TEMPLATES.some(t=>t.id===id) || /^ref:/.test(id) && !!refInfo(id) || /^cref:/.test(id); }
 function styleName(id){ const r = refInfo(id); return r ? r.nome : getTpl(id).nome; }
 function styleUsesPhoto(id){ const r = refInfo(id); return r ? r.pessoa : !!getTpl(id).foto; }
 function imagesOn(){ return !!(window.Plat && Plat.config && Plat.config.imagesEnabled); }
@@ -83,6 +84,7 @@ function merge(base, saved){
   if(!Array.isArray(out.posts)) out.posts = [];
   if(!Array.isArray(out.favs) || !out.favs.length) out.favs = base.favs;
   if(!Array.isArray(out.customRefs)) out.customRefs = [];
+  if(!saved.autoAdded){ out.autoAdded = true; if(!out.favs.includes("ref:auto")) out.favs.unshift("ref:auto"); }
   out.favs = out.favs.filter(validStyle); if(!out.favs.length) out.favs = base.favs;
   if(!Array.isArray(out.fotoIds)) out.fotoIds = [];
   if(!out.cutouts || typeof out.cutouts !== "object") out.cutouts = {};
@@ -196,7 +198,8 @@ async function renderPost(post, opts){
   const key = (opts.key || post.id) + "|" + (post.rev||0) + "|" + brandRev + "|" + post.tpl + "|" + (post.foto||"") + "|" + ((post.bgs||{})[post.tpl]||"") + "|" + (S.cutouts[post.foto]||"") + "|" + ((post.full||{})[post.tpl]||"") + "|" + (opts.only!=null?opts.only:"all") + "|" + (opts.thumb?1:0);
   if(!opts.nocache && imgCache.has(key)) return imgCache.get(key);
   const T = await buildT(opts);
-  const ri = refInfo(post.tpl); post.refDark = ri ? ri.dark : false;
+  const ri = refInfo(post.tpl), fm = (post.fullMeta||{})[post.tpl];
+  post.refDark = ri ? (fm && typeof fm.escuro === "boolean" ? fm.escuro : ri.dark) : false;
   const A = ri ? {full: await getFotoImg((post.full||{})[post.tpl])}
     : {ph: await getFotoImg(post.foto), bg: await getFotoImg((post.bgs||{})[post.tpl]), cut: post.foto ? await getFotoImg(S.cutouts[post.foto]) : null};
   const n = slidesFor(post).length, out = [];
@@ -294,7 +297,8 @@ function localCheck(post){
 }
 function pickTpl(){
   if(draft.tpl) return draft.tpl;
-  const favs = S.favs.length ? S.favs : TEMPLATES.map(t=>t.id);
+  let favs = S.favs.length ? S.favs : TEMPLATES.map(t=>t.id);
+  if(!imagesOn()){ favs = favs.filter(f=>!refInfo(f)); if(!favs.length) favs = TEMPLATES.map(t=>t.id); }
   const last = S.posts[0] && S.posts[0].tpl;
   const opts = favs.length > 1 ? favs.filter(f=>f!==last) : favs;
   return opts[Math.floor(Math.random()*opts.length)];
@@ -589,16 +593,23 @@ function refCard(r, on){ return `
       <button class="fav" data-act="fav" data-id="${esc(r.id)}" aria-pressed="${on}">${on?"✓ Usando":"Usar"}</button>
       <span class="nm">${esc(r.nome)}</span>
     </div>`; }
+function autoCard(){ const on = S.favs.includes("ref:auto"); return `
+    <div class="ref-card">
+      <button class="im auto ${on?"on":""}" data-act="style-open" data-id="ref:auto" aria-label="Ver Criação livre com IA">${REFS.slice(0,4).map(r=>`<img alt="" loading="lazy" src="/refs/${r.id}.jpg">`).join("")}<span class="auto-badge">IA escolhe</span>${on?`<span class="chk">✓</span>`:""}</button>
+      <button class="fav" data-act="fav" data-id="ref:auto" aria-pressed="${on}">${on?"✓ Usando":"Usar"}</button>
+      <span class="nm">Criação livre com IA</span>
+    </div>`; }
 function refsSection(){
   if(!imagesOn()) return "";
   const list = REFS.map(r=>refInfo("ref:"+r.id)).filter(Boolean), mine = S.customRefs.map(r=>refInfo("cref:"+r.id)).filter(Boolean);
   return `
   <section class="stack-sm">
     <h2>Estilos com IA</h2>
-    <p class="muted">A IA recria a arte no estilo destas referências de mercado, com o seu texto, as suas cores${S.fotoIds.length ? " e a sua foto" : ""}. Cada post usa 1 imagem do seu limite do mês.</p>
+    <p class="muted">Em cada post, a IA escreve um prompt exclusivo para o conteúdo, tirando as ideias destas referências de mercado. Em “Criação livre” ela escolhe as referências que combinam com o assunto; marcando uma referência, ela usa aquela como base, com o seu texto, as suas cores${S.fotoIds.length ? " e a sua foto" : ""}. Cada post usa 1 imagem do seu limite do mês.</p>
     ${refUploadStatus()}
     <div class="ref-grid">
       <div class="ref-card add"><label class="im" for="refInput"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Enviar minha referência</span></label><input id="refInput" type="file" accept="image/*" hidden></div>
+      ${autoCard()}
       ${mine.map(r=>refCard(r, S.favs.includes(r.id))).join("")}
       ${list.map(r=>refCard(r, S.favs.includes(r.id))).join("")}
     </div>
@@ -637,8 +648,8 @@ VIEWS.estilo = () => {
 <div class="stack">
   <button class="link" data-act="nav" data-to="estilos" style="align-self:flex-start">← Estilos</button>
   <h1>${esc(ri.nome)}</h1>
-  <p class="muted">Referência de estilo. A IA cria uma arte nova neste visual, com o tema do post, o seu texto e as suas cores${ri.pessoa ? (S.fotoIds.length ? ", usando a sua foto no lugar da pessoa" : ". Adicione uma foto sua para aparecer no lugar da pessoa") : ""}. O CRM e o @ entram embaixo, sempre certos.</p>
-  <div class="ref-big"><img id="refBig" alt="Referência" ${ri.thumb ? `src="${ri.thumb}"` : ""}></div>
+  <p class="muted">${ri.auto ? "A IA lê o conteúdo de cada post, escolhe entre as 29 referências de mercado as que combinam com o assunto e escreve um prompt exclusivo: cenário, lente, ângulo, elementos e tipografia sob medida. Cada post sai diferente" : "Referência de estilo. A IA escreve um prompt novo a partir desta referência e do conteúdo do post"}, com o tema do post, o seu texto e as suas cores${ri.pessoa ? (S.fotoIds.length ? ", usando a sua foto no lugar da pessoa" : ". Adicione uma foto sua para aparecer no lugar da pessoa") : ""}. O CRM e o @ entram embaixo, sempre certos.</p>
+  ${ri.auto ? `<div class="ref-grid">${REFS.slice(0,9).map(r=>`<div class="ref-card"><div class="im"><img alt="" loading="lazy" src="/refs/${r.id}.jpg"></div></div>`).join("")}</div>` : `<div class="ref-big"><img id="refBig" alt="Referência" ${ri.thumb ? `src="${ri.thumb}"` : ""}></div>`}
   <div class="grid2">
     <button class="btn ${on?"btn-ghost":"btn-primary"}" data-act="fav" data-id="${esc(ri.id)}">${on?"Parar de usar":"Usar este estilo"}</button>
     <button class="btn btn-primary" data-act="style-create" data-id="${esc(ri.id)}">Criar post neste estilo</button>
@@ -791,9 +802,12 @@ async function makeAssets(post, forceBg){
       job.msg = "A IA está criando a arte neste estilo" + (foto ? ", com a sua foto" : "") + "… leva cerca de 1 minuto."; refreshPost(post);
       const body = {kind:"post", tema:post.tema, especialidade:S.profile.especialidade, topo:post.topo, pre:s0.pre, titulo:s0.titulo, apoio:s0.apoio, c1:S.brand.cor1, c2:S.brand.cor2, photoPath:foto};
       if(ri.refId) body.refId = ri.refId; else { body.refPrompt = ri.custom.prompt; body.temPessoa = ri.pessoa; }
+      body.recent = S.posts.map(p=>{ const m = p.fullMeta && Object.values(p.fullMeta)[0]; return m && m.principal; }).filter(Boolean).slice(0,6);
+      if(ri.auto) job.msg = "A IA está criando um prompt exclusivo a partir das referências e desenhando a arte… leva de 1 a 2 minutos.";
       const old = (post.full||{})[tpl];
       const r = await Plat.api("/api/image", body);
-      post.full = Object.assign({}, post.full, {[tpl]: r.path}); post.rev = (post.rev||0)+1; save();
+      post.full = Object.assign({}, post.full, {[tpl]: r.path});
+      post.fullMeta = Object.assign({}, post.fullMeta, {[tpl]: {principal:r.principal||"", escuro:r.escuro, prompt:String(r.prompt||"").slice(0,6000)}}); post.rev = (post.rev||0)+1; save();
       if(old) Plat.remove([old]).catch(()=>{});
     }
     if(needsCut(post)){
@@ -840,6 +854,7 @@ VIEWS.post = () => {
     <button class="round" data-act="slide" data-d="1" aria-label="Próxima lâmina" ${slideIdx===total-1?"disabled":""}>›</button></div>` : ""}
   ${!downloads ? `<p class="small muted" style="text-align:center">Para salvar no celular, toque e segure a imagem.</p>` : ""}
   ${aiBlock(post)}
+  ${(post.fullMeta||{})[post.tpl] && post.fullMeta[post.tpl].prompt ? `<details class="small muted"><summary>Ver o prompt que a IA criou para esta arte${post.fullMeta[post.tpl].principal ? " (base: " + esc(styleName("ref:"+post.fullMeta[post.tpl].principal)) + ")" : ""}</summary><div class="caption" style="margin-top:8px;white-space:pre-wrap">${esc(post.fullMeta[post.tpl].prompt)}</div></details>` : ""}
   ${comp}
   <div class="grid2">
     <button class="btn btn-primary" data-act="dl-one">${total>1 ? "Baixar esta lâmina" : "Baixar imagem"}</button>

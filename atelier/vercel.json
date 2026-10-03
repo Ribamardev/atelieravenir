@@ -5,7 +5,7 @@
       "maxDuration": 60
     },
     "api/image.js": {
-      "maxDuration": 180
+      "maxDuration": 300
     },
     "api/refprompt.js": {
       "maxDuration": 60
