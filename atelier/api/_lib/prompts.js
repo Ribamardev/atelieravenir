@@ -37,16 +37,18 @@ const clean = (s, n) => String(s || "").replace(/\s+/g, " ").trim().slice(0, n |
 const strip = (s) => String(s || "").replace(/\*/g, "");
 const highlights = (s) => (String(s || "").match(/\*([^*]+)\*/g) || []).map(x => x.replace(/\*/g, ""));
 
-export function buildPostPrompt({ refPrompt, temPessoa, comFoto, tema, especialidade, topo, pre, titulo, apoio, c1, c2 }) {
+export function buildPostPrompt({ refPrompt, temPessoa, comFoto, refVisual, tema, especialidade, topo, pre, titulo, apoio, c1, c2 }) {
   const destaques = [...highlights(pre), ...highlights(titulo), ...highlights(apoio)];
   const labels = (Array.isArray(topo) ? topo : []).map(t => `"${clean(strip(t), 30)}"`).join(", ");
   const pessoa = comFoto
-    ? "A pessoa da imagem enviada é o médico desta clínica. Use ESSA pessoa na arte: mantenha rosto, traços, tom de pele, cabelo e idade exatamente iguais (não embeleze nem troque a pessoa). Pode ajustar pose, enquadramento e roupa para seguir a referência, usando roupa profissional (jaleco branco ou social)."
+    ? "A pessoa da foto do médico (imagem enviada) é o médico desta clínica. Use ESSA pessoa na arte: mantenha rosto, traços, tom de pele, cabelo e idade exatamente iguais (não embeleze nem troque a pessoa). Pode ajustar pose, enquadramento e roupa para seguir a referência, usando roupa profissional (jaleco branco ou social)."
     : (temPessoa
       ? "Não mostre pessoas reconhecíveis. Onde a referência tem uma pessoa, use um objeto simbólico ligado ao tema, mãos ou uma silhueta, mantendo a mesma composição."
       : "Não mostre pessoas reconhecíveis.");
   return [
-    "Crie a arte de um post de Instagram no formato vertical 4:5 seguindo com fidelidade a DIREÇÃO DE ARTE abaixo (cenário, câmera, ângulo, composição, iluminação, texturas, elementos gráficos e tipografia), com o conteúdo desta clínica.",
+    refVisual
+      ? `A IMAGEM 1 enviada é a REFERÊNCIA DE DESIGN${comFoto ? " e a IMAGEM 2 é a foto do médico desta clínica" : ""}. Crie a arte de um post de Instagram vertical 4:5 que seja uma RECRIAÇÃO FIEL da IMAGEM 1 com o conteúdo desta clínica: mesma composição e grid, mesmas posições e tamanhos de cada bloco de texto, mesmas famílias, pesos, caixa (alta/baixa), espaçamentos e alinhamentos de fonte, mesmos elementos gráficos (linhas, caixas, faixas, setas, bilhetes, rótulos), mesmo fundo, textura, luz, enquadramento e pose. Quem olhar as duas peças lado a lado tem que reconhecer o mesmo template. Mude apenas: os textos (pelos daqui), a pessoa${comFoto ? " (pela da IMAGEM 2)" : ""}, objetos ligados ao assunto e a cor de destaque (pela da marca). Não copie nenhum texto, @, logotipo ou marca da IMAGEM 1, e NUNCA reproduza o rosto ou a identidade da pessoa da IMAGEM 1${comFoto ? "" : " (troque por objeto, mãos ou silhueta ligados ao assunto)"}.`
+      : "Crie a arte de um post de Instagram no formato vertical 4:5 seguindo com fidelidade a DIREÇÃO DE ARTE abaixo (cenário, câmera, ângulo, composição, iluminação, texturas, elementos gráficos e tipografia), com o conteúdo desta clínica.",
     "",
     "DIREÇÃO DE ARTE:",
     clean(refPrompt, 6000),
@@ -62,6 +64,7 @@ export function buildPostPrompt({ refPrompt, temPessoa, comFoto, tema, especiali
     "",
     "TIPOGRAFIA (o mais importante — padrão de diretor de arte de agência premium):",
     "- Letras de fonte digital profissional, desenhadas como vetor: bordas perfeitamente nítidas, traço uniforme, nenhuma letra torta, derretida, borrada, deformada ou com espessura irregular. A granulação, o ruído e o desfoque da foto NÃO passam por cima das letras.",
+    refVisual ? "- PRIORIDADE: as fontes, pesos, tamanhos e o tratamento de cada texto são os da IMAGEM 1. As regras abaixo valem só para o acabamento." : "",
     "- Título: sans-serif grotesca/geométrica display de alto padrão (no espírito de Neue Haas Grotesk Display Black, Gilroy Heavy ou Inter Display Black), caixa alta, kerning óptico apertado (tracking cerca de -3%), entrelinha bem fechada (cerca de 0,88), linhas com larguras parecidas formando um bloco compacto e equilibrado, ocupando cerca de 80% da largura da arte. Se o estilo de referência pedir outra família (serifada, itálica ou condensada), siga a referência com esse mesmo nível de acabamento. Nada de Arial, Impact, fonte padrão, fonte esticada ou condensada artificialmente.",
     "- Frase de abertura: a MESMA família do título (ou a indicada na referência), peso fino (Light), em caixa baixa, com a palavra de destaque em peso Bold; tamanho cerca de 1/3 da altura das letras do título, alinhada pelo mesmo eixo do título e bem próxima dele.",
     "- Palavras de destaque: mesma fonte e mesmo peso do resto da linha, só trocando a cor para a cor de destaque, cor chapada, sem brilho, sem sombra, sem contorno, sem degradê.",
@@ -71,7 +74,7 @@ export function buildPostPrompt({ refPrompt, temPessoa, comFoto, tema, especiali
     "",
     "REGRAS:",
     "- Escreva os textos exatamente como estão acima, em português do Brasil, com todos os acentos corretos. Não acrescente nenhuma outra palavra, número, logotipo, @, assinatura ou marca d'água.",
-    "- Deixe a faixa de baixo da arte (cerca de 9% da altura) limpa, só com o fundo: o app coloca ali a assinatura do médico. Mantenha os textos e o rosto longe das bordas, com margem segura.",
+    "- Os 12% de baixo da arte ficam SEM NENHUM TEXTO, só com o fundo (o app coloca ali a assinatura do médico com CRM). Se faltar espaço, reduza os textos, nunca os empurre para baixo. Mantenha textos e rosto longe das bordas.",
     `- ${pessoa}`,
     "- Troque qualquer marca, produto, logotipo ou pessoa da referência por elementos ligados ao assunto de saúde. Nada de sangue, procedimentos invasivos, antes e depois ou promessas de resultado.",
     "- Acabamento de agência de design premium, nítido, profissional."
@@ -91,7 +94,7 @@ export function directorPrompt({ catalog, base, recent, comFoto, tema, especiali
     : `Escolha no catálogo 1 referência PRINCIPAL que combine com o assunto e com o tom deste post, e até 2 referências SECUNDÁRIAS para emprestar elementos (uma textura, um elemento gráfico, um tratamento de foto ou de tipografia).${recent && recent.length ? ` Evite usar como principal as que saíram nos últimos posts: ${recent.join(", ")}.` : ""}${comFoto ? " O médico enviou uma foto dele: prefira referências com pessoa, onde ele será o protagonista." : " Não há foto do médico: prefira referências sem pessoa ou troque a pessoa por objetos, mãos ou cena ligada ao assunto."}`;
   return [
     "Você é diretor de arte de uma agência premium de marketing médico no Brasil. Escreva um prompt NOVO e exclusivo para uma ferramenta de geração de imagem (gpt-image) criar a arte de um post de Instagram 4:5.",
-    "O prompt tem que tirar a ideia das referências de mercado abaixo — mesmo nível de design, mesmo tipo de composição, tipografia, luz e acabamento — mas adaptado ao CONTEÚDO deste post: a cena, os objetos, o cenário e os elementos visuais devem ter relação direta com o assunto e a especialidade. Não é para copiar a referência: é para criar uma peça nova inspirada nela.",
+    "A imagem da referência PRINCIPAL vai junto para a ferramenta de imagem, que vai recriar o mesmo template. Por isso o seu prompt deve MANTER a composição, o grid, a tipografia (famílias, pesos, tamanhos, caixa), os elementos gráficos, o fundo, a luz e a pose da referência principal exatamente como estão descritos no catálogo, e adaptar só o conteúdo: textos, objetos e cenário ligados ao assunto e à especialidade. Descreva a tipografia de cada bloco com precisão, copiando a descrição da referência principal. Das secundárias, empreste no máximo um detalhe que não mude o layout.",
     "",
     "CONTEÚDO DO POST:",
     `- Especialidade: ${clean(especialidade, 60) || "saúde"}`,
@@ -107,7 +110,7 @@ export function directorPrompt({ catalog, base, recent, comFoto, tema, especiali
     "",
     "COMO ESCREVER O PROMPT (em português, bem detalhado, nesta ordem):",
     "CENÁRIO: ambiente, fundo, objetos e elementos ligados ao assunto. CÂMERA: tipo de lente, abertura, luz, granulação. POSIÇÃO E ÂNGULO: enquadramento, onde fica a pessoa ou o objeto principal, altura da câmera, pose. DETALHES: texturas, elementos gráficos, paleta usando as cores da marca. POSTAGEM: onde fica cada bloco de texto (rótulos, abertura, título, apoio), alinhamento, tamanhos relativos, família e peso das fontes, caixa alta/baixa, como as palavras de destaque são tratadas (cor, caixa atrás, sublinhado, itálico).",
-    "Regras: não invente outros textos além dos do conteúdo; deixe os 9% de baixo da arte só com fundo (lá entra a assinatura com CRM); nada de marcas, logotipos ou pessoas reais; nada de sangue, procedimentos invasivos, antes e depois, promessa de resultado ou sensacionalismo (regras do CFM). Se houver foto do médico, ele é a única pessoa da arte, com roupa profissional.",
+    "Regras: não invente outros textos além dos do conteúdo; deixe os 12% de baixo da arte sem nenhum texto, só com fundo (lá entra a assinatura com CRM); nada de marcas, logotipos ou pessoas reais; nada de sangue, procedimentos invasivos, antes e depois, promessa de resultado ou sensacionalismo (regras do CFM). Se houver foto do médico, ele é a única pessoa da arte, com roupa profissional.",
     "",
     "CATÁLOGO DE REFERÊNCIAS DE MERCADO:",
     cat,
@@ -150,7 +153,7 @@ export function buildSlidePrompt({ artPrompt, kind, i, n, titulo, texto, itens, 
     "",
     "REGRAS:",
     "- Escreva os textos exatamente como estão acima, em português do Brasil. Não acrescente nenhuma outra palavra, número de página, logotipo, @, assinatura ou marca d'água.",
-    "- Deixe a faixa de baixo (cerca de 9% da altura) só com o fundo: o app coloca ali a assinatura do médico com CRM.",
+    "- Os 12% de baixo ficam sem nenhum texto, só com o fundo (o app coloca ali a assinatura do médico com CRM). Se faltar espaço, reduza o texto.",
     "- Nada de sangue, procedimentos invasivos, antes e depois ou promessa de resultado.",
   ].filter(x => x !== "").join("\n");
 }

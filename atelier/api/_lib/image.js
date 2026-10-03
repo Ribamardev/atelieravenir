@@ -36,12 +36,13 @@ export async function cutoutPerson(photoBuffer, photoType = "image/jpeg") {
   return { buffer: await unpack(r), contentType: "image/png", ext: "png" };
 }
 
-/** Post completo: com foto do médico usa "edits" (a pessoa entra na arte); sem foto usa "generations". */
-export async function generatePost(prompt, person) {
-  if (person && person.buffer) {
+/** Post completo. images = lista de {buffer, type} (ex.: [referência de estilo, foto do médico]). Sem imagens usa "generations". */
+export async function generatePost(prompt, images) {
+  const list = (Array.isArray(images) ? images : (images ? [images] : [])).filter(x => x && x.buffer);
+  if (list.length) {
     const form = new FormData();
     form.append("model", model());
-    form.append("image[]", new Blob([person.buffer], { type: person.type || "image/png" }), "medico." + ((person.type || "").includes("png") ? "png" : "jpg"));
+    list.forEach((im, k) => form.append("image[]", new Blob([im.buffer], { type: im.type || "image/jpeg" }), `img${k + 1}.` + ((im.type || "").includes("png") ? "png" : "jpg")));
     form.append("prompt", prompt);
     form.append("size", "1024x1536");
     form.append("quality", quality());

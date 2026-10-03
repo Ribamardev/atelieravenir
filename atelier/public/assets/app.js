@@ -815,7 +815,7 @@ async function makeAssets(post, forceBg){
       const foto = ri.pessoa && post.foto ? (S.cutouts[post.foto] || post.foto) : "";
       job.msg = "A IA está criando a arte neste estilo" + (foto ? ", com a sua foto" : "") + "… leva cerca de 1 minuto."; refreshPost(post);
       const body = {kind:"post", tema:post.tema, especialidade:S.profile.especialidade, topo:post.topo, pre:s0.pre, titulo:s0.titulo, apoio:s0.apoio, c1:S.brand.cor1, c2:S.brand.cor2, photoPath:foto};
-      if(ri.refId) body.refId = ri.refId; else { body.refPrompt = ri.custom.prompt; body.temPessoa = ri.pessoa; }
+      if(ri.refId) body.refId = ri.refId; else { body.refPrompt = ri.custom.prompt; body.temPessoa = ri.pessoa; body.refPath = ri.custom.path; }
       body.recent = S.posts.map(p=>{ const m = p.fullMeta && Object.values(p.fullMeta)[0]; return m && m.principal; }).filter(Boolean).slice(0,6);
       if(ri.auto) job.msg = "A IA está criando um prompt exclusivo a partir das referências e desenhando a arte… leva de 1 a 2 minutos.";
       const old = (post.full||{})[tpl];

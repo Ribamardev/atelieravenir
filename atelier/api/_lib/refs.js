@@ -205,3 +205,16 @@ export const REFS = [
  }
 ];
 export const getRef = (id) => REFS.find(r => r.id === id) || null;
+
+/** Imagem da referência (a mesma da galeria, servida pelo próprio site) para mandar junto à IA de imagem. */
+export async function refImage(id, host) {
+  if (!getRef(id)) return null;
+  const hosts = [process.env.VERCEL_PROJECT_PRODUCTION_URL, host, "atelier-avenir.vercel.app"].filter(Boolean);
+  for (const h of hosts) {
+    try {
+      const r = await fetch(`https://${h}/refs/${id}.jpg`);
+      if (r.ok) return { buffer: Buffer.from(await r.arrayBuffer()), type: "image/jpeg" };
+    } catch (e) {}
+  }
+  return null;
+}

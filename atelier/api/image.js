@@ -7,7 +7,7 @@
 import { requireUser, readJson, send, fail, httpError, checkAndCount } from "./_lib/core.js";
 import { generateBackground, cutoutPerson, generatePost } from "./_lib/image.js";
 import { backgroundPrompt, backgroundSize, buildPostPrompt, directorPrompt, buildSlidePrompt } from "./_lib/prompts.js";
-import { getRef, REFS } from "./_lib/refs.js";
+import { getRef, REFS, refImage } from "./_lib/refs.js";
 import { generateJson } from "./_lib/text.js";
 import { randomUUID } from "node:crypto";
 
@@ -55,8 +55,15 @@ export default async function handler(req, res) {
         refPrompt = fb ? fb.prompt : custom; temPessoa = fb ? fb.pessoa : !!body.temPessoa; principal = fb ? fb.id : "propria";
       }
       if (!refPrompt || refPrompt.length < 40) throw httpError(400, "invalid_request", "Escolha um estilo de referência.");
-      const prompt = buildPostPrompt({ refPrompt, temPessoa, comFoto: !!person, ...content });
-      out = await generatePost(prompt, person);
+      // 3) imagem da referência vai junto, para a IA seguir o template de verdade (fontes, layout, elementos)
+      let refImg = null;
+      if (getRef(principal)) refImg = await refImage(principal, req.headers["x-forwarded-host"] || req.headers.host);
+      else if (custom && body.refPath && String(body.refPath).startsWith(ctx.user.id + "/")) {
+        const { data: rf } = await ctx.db.storage.from("atelier-assets").download(String(body.refPath));
+        if (rf) refImg = { buffer: Buffer.from(await rf.arrayBuffer()), type: rf.type || "image/jpeg" };
+      }
+      const prompt = buildPostPrompt({ refPrompt, temPessoa, comFoto: !!person, refVisual: !!refImg, ...content });
+      out = await generatePost(prompt, [refImg, person]);
       out.meta = { principal: getRef(principal) ? principal : (ref ? ref.id : ""), escuro: art ? !!art.escuro : (getRef(principal) ? getRef(principal).dark : true), prompt: refPrompt };
       folder = "post";
     } else if (kind === "slide") {
@@ -71,7 +78,7 @@ export default async function handler(req, res) {
         nome: body.nome, whatsapp: body.whatsapp, cidade: body.cidade, c1: body.c1, c2: body.c2,
       });
       await checkAndCount(ctx, "image");
-      out = await generatePost(prompt, { buffer: Buffer.from(await file.arrayBuffer()), type: file.type || "image/jpeg" });
+      out = await generatePost(prompt, [{ buffer: Buffer.from(await file.arrayBuffer()), type: file.type || "image/jpeg" }]);
       folder = "post";
     } else if (kind === "cutout") {
       const photoPath = String(body.photoPath || "");
