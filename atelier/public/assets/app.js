@@ -199,12 +199,13 @@ async function buildT(opts){
 }
 async function renderPost(post, opts){
   opts = opts || {};
-  const key = (opts.key || post.id) + "|" + (post.rev||0) + "|" + brandRev + "|" + post.tpl + "|" + (post.foto||"") + "|" + ((post.bgs||{})[post.tpl]||"") + "|" + (S.cutouts[post.foto]||"") + "|" + ((post.full||{})[post.tpl]||"") + "|" + (opts.only!=null?opts.only:"all") + "|" + (opts.thumb?1:0);
+  const key = (opts.key || post.id) + "|" + (post.rev||0) + "|" + brandRev + "|" + post.tpl + "|" + (post.foto||"") + "|" + ((post.bgs||{})[post.tpl]||"") + "|" + (S.cutouts[post.foto]||"") + "|" + ((post.full||{})[post.tpl]||"") + "|" + ((post.pages||{})[post.tpl]||[]).join(",") + "|" + (opts.only!=null?opts.only:"all") + "|" + (opts.thumb?1:0);
   if(!opts.nocache && imgCache.has(key)) return imgCache.get(key);
   const T = await buildT(opts);
   const ri = refInfo(post.tpl), fm = (post.fullMeta||{})[post.tpl];
   post.refDark = ri ? (fm && typeof fm.escuro === "boolean" ? fm.escuro : ri.dark) : false;
-  const A = ri ? {full: await getFotoImg((post.full||{})[post.tpl])}
+  const A = ri ? {full: await getFotoImg((post.full||{})[post.tpl]), aiPages: imagesOn() && post.formato === "carrossel",
+      pages: await Promise.all(((post.pages||{})[post.tpl]||[]).map(p=>p ? getFotoImg(p) : null))}
     : {ph: await getFotoImg(post.foto), bg: await getFotoImg((post.bgs||{})[post.tpl]), cut: post.foto ? await getFotoImg(S.cutouts[post.foto]) : null};
   const n = slidesFor(post).length, out = [];
   for(let i=0;i<n;i++){
@@ -796,7 +797,13 @@ const aiJobs = {};
 function needsFull(post){ return !!refInfo(post.tpl); }
 function needsBg(post){ if(refInfo(post.tpl)) return false; const t = getTpl(post.tpl); return !!((t.aiBg && !(t.photoBg && post.foto)) || (t.bandBg && !post.foto)); }
 function needsCut(post){ if(refInfo(post.tpl)) return false; const t = getTpl(post.tpl); return !!(t.needsCut && post.foto && !S.cutouts[post.foto]); }
-function missingAI(post){ return (needsFull(post) && !(post.full||{})[post.tpl]) || (needsBg(post) && !(post.bgs||{})[post.tpl]) || needsCut(post); }
+function missingPages(post){
+  if(!needsFull(post) || post.formato !== "carrossel") return [];
+  const pg = (post.pages||{})[post.tpl] || [], n = slidesFor(post).length, out = [];
+  for(let i=1;i<n;i++) if(!pg[i]) out.push(i);
+  return out;
+}
+function missingAI(post){ return (needsFull(post) && (!(post.full||{})[post.tpl] || missingPages(post).length)) || (needsBg(post) && !(post.bgs||{})[post.tpl]) || needsCut(post); }
 function refreshPost(post){ if(view==="post" && current===post && !editing) render(); }
 async function makeAssets(post, forceBg){
   if(!Plat.config || !Plat.config.imagesEnabled) return;
@@ -814,9 +821,13 @@ async function makeAssets(post, forceBg){
       const old = (post.full||{})[tpl];
       const r = await Plat.api("/api/image", body);
       post.full = Object.assign({}, post.full, {[tpl]: r.path});
-      post.fullMeta = Object.assign({}, post.fullMeta, {[tpl]: {principal:r.principal||"", escuro:r.escuro, prompt:String(r.prompt||"").slice(0,6000)}}); post.rev = (post.rev||0)+1; save();
-      if(old) Plat.remove([old]).catch(()=>{});
+      post.fullMeta = Object.assign({}, post.fullMeta, {[tpl]: {principal:r.principal||"", escuro:r.escuro, prompt:String(r.prompt||"").slice(0,6000)}}); post.rev = (post.rev||0)+1;
+      const oldPages = ((post.pages||{})[tpl]||[]).filter(Boolean);
+      post.pages = Object.assign({}, post.pages, {[tpl]: []}); save();
+      if(old) Plat.remove([old].concat(oldPages)).catch(()=>{});
+      refreshPost(post);
     }
+    if(ri && (post.full||{})[post.tpl]) await makePages(post, job, missingPages(post));
     if(needsCut(post)){
       job.msg = "Recortando você da foto… (só na primeira vez)"; refreshPost(post);
       const r = await Plat.api("/api/image", {kind:"cutout", photoPath:post.foto});
@@ -832,13 +843,42 @@ async function makeAssets(post, forceBg){
   }catch(e){ job.error = errMsg(e); }
   job.busy = false; refreshPost(post);
 }
+/* Lâminas do carrossel no mesmo estilo da capa (a capa vai como referência para a IA) */
+async function makePages(post, job, idxs){
+  const tpl = post.tpl, list = slidesFor(post), n = list.length;
+  if(!idxs.length) return;
+  let done = 0;
+  const msg = () => { job.msg = `Criando as lâminas do carrossel no mesmo estilo da capa… (${done} de ${idxs.length} prontas)`; refreshPost(post); };
+  msg();
+  const one = async (i) => {
+    const sl = list[i];
+    const body = {kind:"slide", coverPath:post.full[tpl], artPrompt:((post.fullMeta||{})[tpl]||{}).prompt || "", slideKind: sl.kind === "cta" ? "cta" : "interna",
+      index:i, total:n, titulo:sl.titulo||"", texto:sl.texto||"", itens:sl.itens||[], cta:post.cta||"", nome:S.profile.nome, whatsapp:S.profile.whatsapp, cidade:S.profile.cidade, c1:S.brand.cor1, c2:S.brand.cor2};
+    const r = await Plat.api("/api/image", body);
+    if(post.tpl !== tpl || !post.full[tpl] || post.full[tpl] !== body.coverPath){ Plat.remove([r.path]).catch(()=>{}); return; }
+    const arr = ((post.pages||{})[tpl] || []).slice(); const old = arr[i]; arr[i] = r.path;
+    post.pages = Object.assign({}, post.pages, {[tpl]: arr}); post.rev = (post.rev||0)+1; save();
+    if(old) Plat.remove([old]).catch(()=>{});
+    done++; msg();
+  };
+  const queue = idxs.slice(); let firstErr = null;
+  await Promise.all([0,1,2].map(async () => { while(queue.length){ const i = queue.shift(); try{ await one(i); }catch(e){ firstErr = firstErr || e; } } }));
+  if(firstErr) throw firstErr;
+}
+async function redoPage(post, i){
+  if(!imagesOn()) return;
+  const job = aiJobs[post.id] = {busy:true, error:"", msg:""};
+  try{ await makePages(post, job, [i]); }catch(e){ job.error = errMsg(e); }
+  job.busy = false; refreshPost(post);
+}
 function aiBlock(post){
   if(!Plat.config || !Plat.config.imagesEnabled) return "";
   const job = aiJobs[post.id];
   if(job && job.busy) return `<div class="ai-status"><div class="spinner" aria-hidden="true"></div><span>${esc(job.msg || "Criando imagem…")}</span></div>`;
   if(job && job.error) return `<div class="stack-sm"><div class="notice warn"><div>${esc(job.error)}</div></div><button class="btn btn-ghost btn-block" data-act="ai-make">Tentar de novo</button></div>`;
-  if(missingAI(post)) return `<button class="btn btn-ghost btn-block" data-act="ai-make">${needsFull(post) ? "Criar a arte com IA" : "Criar imagem com IA para este estilo"}</button><p class="small muted" style="text-align:center;margin-top:-6px">Usa 1 imagem do seu limite do mês.</p>`;
-  if(needsBg(post) || needsFull(post)) return `<button class="link" data-act="ai-new" style="align-self:center">Gerar outra imagem com IA</button>`;
+  if(missingAI(post)) return `<button class="btn btn-ghost btn-block" data-act="ai-make">${needsFull(post) ? ((post.full||{})[post.tpl] ? "Criar as lâminas no estilo da capa" : "Criar a arte com IA") : "Criar imagem com IA para este estilo"}</button><p class="small muted" style="text-align:center;margin-top:-6px">Usa 1 imagem do seu limite do mês.</p>`;
+  if(needsFull(post)) return `<div class="row" style="justify-content:center;gap:18px;flex-wrap:wrap">${post.formato==="carrossel" && slideIdx>0 ? `<button class="link" data-act="ai-page">Refazer esta lâmina</button>` : ""}<button class="link" data-act="ai-new">${post.formato==="carrossel" ? "Refazer o carrossel todo" : "Gerar outra imagem com IA"}</button></div>`;
+  if(needsBg(post)) return `<button class="link" data-act="ai-new" style="align-self:center">Gerar outra imagem com IA</button>`;
   return "";
 }
 
@@ -1080,7 +1120,7 @@ function act(a, d, el){
       p.cta = v("e_cta").slice(0,40); p.legenda = document.getElementById("e_leg").value;
       p.hashtags = v("e_hash").split(/\s+/).filter(Boolean).map(h=>h[0]==="#"?h:"#"+h);
       p.alertas = Array.from(new Set((p.alertas||[]).filter(x=>!x.startsWith("Revise a expressão")).concat(localCheck(p))));
-      p.rev = (p.rev||0)+1; editing = false; save(); toast(refInfo(p.tpl) ? "Textos salvos. Toque em “Gerar outra imagem com IA” para a arte usar o texto novo." : "Post atualizado"); render(); window.scrollTo(0,0); break;
+      p.rev = (p.rev||0)+1; editing = false; save(); toast(refInfo(p.tpl) ? "Textos salvos. Toque em “Refazer” embaixo da arte para ela usar o texto novo." : "Post atualizado"); render(); window.scrollTo(0,0); break;
     }
     case "copy": {
       const txt = (current.legenda||"") + (current.hashtags && current.hashtags.length ? "\n\n" + current.hashtags.join(" ") : "");
@@ -1095,6 +1135,7 @@ function act(a, d, el){
     case "open": current = S.posts[+d.i]; current.fromHistory = true; slideIdx = 0; go("post"); break;
     case "ai-make": makeAssets(current); break;
     case "ai-new": makeAssets(current, true); break;
+    case "ai-page": redoPage(current, slideIdx); break;
     case "login-send": sendLogin(); break;
     case "login-again": loginState = {email:loginState.email, sent:false, error:"", busy:false}; render(); break;
     case "logout": Plat.signOut(); break;

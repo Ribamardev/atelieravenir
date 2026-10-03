@@ -115,3 +115,42 @@ export function directorPrompt({ catalog, base, recent, comFoto, tema, especiali
     'Responda só com JSON: {"prompt":"o prompt completo","principal":"id da referência principal (ou \"propria\")","secundarias":["ids"],"pessoa":true se a arte mostra uma pessoa,"escuro":true se o fundo predominante for escuro}'
   ].filter(x => x !== "").join("\n");
 }
+
+/* ---------- Lâminas do carrossel: mesmo design system da capa (a capa vai junto como imagem de referência) ---------- */
+export function buildSlidePrompt({ artPrompt, kind, i, n, titulo, texto, itens, cta, nome, whatsapp, cidade, c1, c2 }) {
+  const lista = (Array.isArray(itens) ? itens : []).slice(0, 4).map(x => `"${clean(strip(x && x.rotulo), 40)}: ${clean(strip(x && x.texto), 110)}"`);
+  const hl = [...highlights(titulo), ...highlights(texto)];
+  const conteudo = kind === "cta" ? [
+    `- Esta é a ÚLTIMA lâmina (${i + 1} de ${n}): chamada para ação.`,
+    `- Frase pequena: "Ficou com alguma dúvida?"`,
+    `- Chamada principal (grande): "${clean(strip(cta) || "Agende sua consulta", 50)}"`,
+    `- Botão ou faixa de destaque com: "${whatsapp ? "WhatsApp " + clean(whatsapp, 30) : "Fale com a nossa equipe"}"`,
+    `- Linha discreta: "${[clean(nome, 50), clean(cidade, 40)].filter(Boolean).join(" · ")}"`,
+  ] : [
+    `- Esta é a lâmina ${i + 1} de ${n} de um carrossel educativo.`,
+    `- Número da lâmina como elemento gráfico grande, no mesmo estilo da capa: "${String(i).padStart(2, "0")}"`,
+    `- Título: "${clean(strip(titulo), 110)}"`,
+    texto ? `- Texto: "${clean(strip(texto), 320)}"` : "",
+    lista.length ? `- Itens (lista com marcadores no estilo da capa): ${lista.join("; ")}` : "",
+    hl.length ? `- Palavras de destaque (na cor de destaque): ${hl.map(h => `"${clean(h, 40)}"`).join(", ")}` : "",
+  ];
+  return [
+    `A imagem enviada é a CAPA de um carrossel de Instagram. Crie a lâmina ${i + 1} de ${n} do MESMO carrossel, no formato vertical 4:5.`,
+    "Ela tem que parecer feita pelo mesmo designer, no mesmo dia: mesmo fundo e textura, mesma paleta, mesmas famílias e pesos de fonte, mesmo tratamento das palavras de destaque (caixas, sublinhados, cores), mesmos elementos gráficos (bilhetes, setas, linhas, rótulos), mesmas margens e grid. Quem passar o carrossel tem que sentir uma peça única.",
+    "Lâmina interna é mais limpa que a capa: texto bem legível, hierarquia clara, bastante respiro. Não repita os textos da capa. A pessoa da capa NÃO precisa aparecer; se aparecer, que seja pequena ou recortada na borda, sem competir com o texto.",
+    "",
+    "DIREÇÃO DE ARTE DA CAPA (para manter o mesmo estilo):",
+    clean(artPrompt, 2500) || "(siga a capa enviada)",
+    "",
+    "CONTEÚDO DESTA LÂMINA (use exatamente estes textos):",
+    ...conteudo,
+    `- Cor de destaque da marca: ${clean(c1, 9)}. Cor secundária: ${clean(c2, 9)}.`,
+    "",
+    "TIPOGRAFIA: letras de fonte digital profissional, nítidas como vetor, kerning e entrelinha cuidadosos, sem letras tortas ou borradas, acentos corretos. Texto corrido em tamanho confortável de leitura no celular (nunca minúsculo). A granulação do fundo não passa por cima das letras.",
+    "",
+    "REGRAS:",
+    "- Escreva os textos exatamente como estão acima, em português do Brasil. Não acrescente nenhuma outra palavra, número de página, logotipo, @, assinatura ou marca d'água.",
+    "- Deixe a faixa de baixo (cerca de 9% da altura) só com o fundo: o app coloca ali a assinatura do médico com CRM.",
+    "- Nada de sangue, procedimentos invasivos, antes e depois ou promessa de resultado.",
+  ].filter(x => x !== "").join("\n");
+}

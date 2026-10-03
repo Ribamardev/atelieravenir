@@ -6,7 +6,7 @@
 // Resposta: { path } — caminho do arquivo no Storage do Supabase (bucket "atelier-assets")
 import { requireUser, readJson, send, fail, httpError, checkAndCount } from "./_lib/core.js";
 import { generateBackground, cutoutPerson, generatePost } from "./_lib/image.js";
-import { backgroundPrompt, backgroundSize, buildPostPrompt, directorPrompt } from "./_lib/prompts.js";
+import { backgroundPrompt, backgroundSize, buildPostPrompt, directorPrompt, buildSlidePrompt } from "./_lib/prompts.js";
 import { getRef, REFS } from "./_lib/refs.js";
 import { generateJson } from "./_lib/text.js";
 import { randomUUID } from "node:crypto";
@@ -58,6 +58,20 @@ export default async function handler(req, res) {
       const prompt = buildPostPrompt({ refPrompt, temPessoa, comFoto: !!person, ...content });
       out = await generatePost(prompt, person);
       out.meta = { principal: getRef(principal) ? principal : (ref ? ref.id : ""), escuro: art ? !!art.escuro : (getRef(principal) ? getRef(principal).dark : true), prompt: refPrompt };
+      folder = "post";
+    } else if (kind === "slide") {
+      const coverPath = String(body.coverPath || "");
+      if (!coverPath.startsWith(ctx.user.id + "/")) throw httpError(403, "invalid_request", "Capa inválida.");
+      const { data: file, error } = await ctx.db.storage.from("atelier-assets").download(coverPath);
+      if (error || !file) throw httpError(404, "invalid_request", "Não encontramos a capa deste carrossel.");
+      const prompt = buildSlidePrompt({
+        artPrompt: String(body.artPrompt || "").slice(0, 4000), kind: body.slideKind === "cta" ? "cta" : "interna",
+        i: Math.max(1, Math.min(9, +body.index || 1)), n: Math.max(2, Math.min(10, +body.total || 2)),
+        titulo: body.titulo, texto: body.texto, itens: body.itens, cta: body.cta,
+        nome: body.nome, whatsapp: body.whatsapp, cidade: body.cidade, c1: body.c1, c2: body.c2,
+      });
+      await checkAndCount(ctx, "image");
+      out = await generatePost(prompt, { buffer: Buffer.from(await file.arrayBuffer()), type: file.type || "image/jpeg" });
       folder = "post";
     } else if (kind === "cutout") {
       const photoPath = String(body.photoPath || "");

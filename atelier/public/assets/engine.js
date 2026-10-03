@@ -691,14 +691,14 @@ function drawAIBg(ctx, t, img){
 }
 /* ---------- Estilos com IA (referências): a arte vem pronta da IA; o app só coloca a assinatura ---------- */
 function isRefTpl(id){ return /^c?ref:/.test(String(id || "")); }
-function drawRefCover(ctx, T, post, img){
+function drawRefCover(ctx, T, post, img, msg){
   if(img){
     drawCover(ctx, img, 0, 0, W, H, .5, .5);
   } else {
     const g = ctx.createLinearGradient(0,0,W,H); g.addColorStop(0, mix(T.c1,"#000",.35)); g.addColorStop(1, mix(T.c1,"#000",.75));
     ctx.fillStyle = g; ctx.fillRect(0,0,W,H); grain(ctx,.5);
     setF(ctx, F.mont7, 40, 0); ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("A IA está criando a arte", W/2, H/2 - 30);
+    ctx.fillText(msg || "A IA está criando a arte", W/2, H/2 - 30);
     setF(ctx, F.mont4, 28, 0); ctx.fillStyle = "rgba(255,255,255,.7)"; ctx.fillText("neste estilo de referência…", W/2, H/2 + 24);
   }
   const b = ctx.createLinearGradient(0, H-200, 0, H); b.addColorStop(0,"rgba(0,0,0,0)"); b.addColorStop(1,"rgba(0,0,0,.62)");
@@ -711,7 +711,9 @@ function drawSlide(ctx, post, i, T, A){
   if(isRefTpl(post.tpl)){
     const list = slidesFor(post), sl = list[i], n = list.length, fb = getTpl(post.refDark ? "estudio" : "clareza");
     ctx.save(); ctx.clearRect(0,0,W,H);
+    const pg = A.pages && A.pages[i];
     if(sl.kind === "capa") drawRefCover(ctx, T, post, A.full);
+    else if(pg || A.aiPages) drawRefCover(ctx, T, post, pg, "A IA está criando esta lâmina");
     else if(sl.kind === "interna") innerSlide(ctx, fb, T, sl, post, i, n);
     else ctaSlide(ctx, fb, T, post, i, n);
     ctx.restore(); return;
