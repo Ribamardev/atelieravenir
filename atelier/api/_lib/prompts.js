@@ -32,6 +32,19 @@ export function backgroundPrompt(p) {
 export function backgroundSize(tpl) { return tpl === "faixa" ? "1536x1024" : "1024x1536"; }
 export const STYLES_WITH_AI_BG = Object.keys(STYLES);
 
+/* ---------- Formato e área segura (a imagem sai em 1024x1536 e o app recorta para 1080x1350) ---------- */
+const FORMATO = [
+  "",
+  "FORMATO E ÁREA SEGURA (obrigatório):",
+  "- Adapte a composição automaticamente ao formato do post, mantendo todos os elementos visuais proporcionais, bem distribuídos e dentro da área segura.",
+  "- O post final do Instagram é 1080x1350 px (4:5). Esta imagem é gerada em 2:3 vertical e depois recortada para 4:5 pelo centro: os 9% de cima e os 9% de baixo da imagem gerada serão CORTADOS. Nessas faixas coloque só a continuação do fundo.",
+  "- Todo texto, rosto, logo, ícone e elemento importante fica entre 9% e 80% da altura da imagem gerada, com pelo menos 7% de margem nas laterais. Entre 80% e 91% da altura fica só fundo: ali o app coloca a assinatura do médico com CRM.",
+  "- Reorganize textos, imagens, ícones e demais elementos para preencher o espaço de forma equilibrada, sem simplesmente esticar ou cortar a composição original da referência.",
+  "- Garanta que nenhum texto ou elemento importante fique cortado, muito próximo das bordas ou fora da área visível. Se faltar espaço, diminua o texto; nunca o empurre para as bordas.",
+  "- Preserve a hierarquia visual, alinhamentos, proporções, legibilidade e identidade visual da marca.",
+  "- A composição deve parecer criada originalmente para o formato 4:5, e não apenas redimensionada.",
+];
+
 /* ---------- Post completo no estilo de uma referência ---------- */
 const clean = (s, n) => String(s || "").replace(/\s+/g, " ").trim().slice(0, n || 200);
 const strip = (s) => String(s || "").replace(/\*/g, "");
@@ -74,7 +87,7 @@ export function buildPostPrompt({ refPrompt, temPessoa, comFoto, refVisual, tema
     "",
     "REGRAS:",
     "- Escreva os textos exatamente como estão acima, em português do Brasil, com todos os acentos corretos. Não acrescente nenhuma outra palavra, número, logotipo, @, assinatura ou marca d'água.",
-    "- Os 12% de baixo da arte ficam SEM NENHUM TEXTO, só com o fundo (o app coloca ali a assinatura do médico com CRM). Se faltar espaço, reduza os textos, nunca os empurre para baixo. Mantenha textos e rosto longe das bordas.",
+    ...FORMATO,
     `- ${pessoa}`,
     "- Troque qualquer marca, produto, logotipo ou pessoa da referência por elementos ligados ao assunto de saúde. Nada de sangue, procedimentos invasivos, antes e depois ou promessas de resultado.",
     "- Acabamento de agência de design premium, nítido, profissional."
@@ -110,7 +123,7 @@ export function directorPrompt({ catalog, base, recent, comFoto, tema, especiali
     "",
     "COMO ESCREVER O PROMPT (em português, bem detalhado, nesta ordem):",
     "CENÁRIO: ambiente, fundo, objetos e elementos ligados ao assunto. CÂMERA: tipo de lente, abertura, luz, granulação. POSIÇÃO E ÂNGULO: enquadramento, onde fica a pessoa ou o objeto principal, altura da câmera, pose. DETALHES: texturas, elementos gráficos, paleta usando as cores da marca. POSTAGEM: onde fica cada bloco de texto (rótulos, abertura, título, apoio), alinhamento, tamanhos relativos, família e peso das fontes, caixa alta/baixa, como as palavras de destaque são tratadas (cor, caixa atrás, sublinhado, itálico).",
-    "Regras: não invente outros textos além dos do conteúdo; deixe os 12% de baixo da arte sem nenhum texto, só com fundo (lá entra a assinatura com CRM); nada de marcas, logotipos ou pessoas reais; nada de sangue, procedimentos invasivos, antes e depois, promessa de resultado ou sensacionalismo (regras do CFM). Se houver foto do médico, ele é a única pessoa da arte, com roupa profissional.",
+    "Regras: não invente outros textos além dos do conteúdo; respeite a área segura: a imagem é gerada em 2:3 e recortada para 4:5 (1080x1350), então todo o conteúdo fica entre 9% e 80% da altura e com 7% de margem nas laterais; acima e abaixo disso só fundo (embaixo entra a assinatura com CRM); nada de marcas, logotipos ou pessoas reais; nada de sangue, procedimentos invasivos, antes e depois, promessa de resultado ou sensacionalismo (regras do CFM). Se houver foto do médico, ele é a única pessoa da arte, com roupa profissional.",
     "",
     "CATÁLOGO DE REFERÊNCIAS DE MERCADO:",
     cat,
@@ -153,7 +166,7 @@ export function buildSlidePrompt({ artPrompt, kind, i, n, titulo, texto, itens, 
     "",
     "REGRAS:",
     "- Escreva os textos exatamente como estão acima, em português do Brasil. Não acrescente nenhuma outra palavra, número de página, logotipo, @, assinatura ou marca d'água.",
-    "- Os 12% de baixo ficam sem nenhum texto, só com o fundo (o app coloca ali a assinatura do médico com CRM). Se faltar espaço, reduza o texto.",
+    ...FORMATO,
     "- Nada de sangue, procedimentos invasivos, antes e depois ou promessa de resultado.",
   ].filter(x => x !== "").join("\n");
 }
