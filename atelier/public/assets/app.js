@@ -73,6 +73,10 @@ function refInfo(id){
 function validStyle(id){ return id==="ref:auto" || TEMPLATES.some(t=>t.id===id) || /^ref:/.test(id) && !!refInfo(id) || /^cref:/.test(id); }
 function styleName(id){ const r = refInfo(id); return r ? r.nome : getTpl(id).nome; }
 function styleUsesPhoto(id){ const r = refInfo(id); return r ? r.pessoa : !!getTpl(id).foto; }
+function stylePool(){
+  if(imagesOn()){ const r = S.favs.filter(f=>refInfo(f)); return r.length ? r : ["ref:auto"]; }
+  const t = S.favs.filter(f=>!refInfo(f)); return t.length ? t : TEMPLATES.map(x=>x.id);
+}
 function imagesOn(){ return !!(window.Plat && Plat.config && Plat.config.imagesEnabled); }
 
 function merge(base, saved){
@@ -297,8 +301,7 @@ function localCheck(post){
 }
 function pickTpl(){
   if(draft.tpl) return draft.tpl;
-  let favs = S.favs.length ? S.favs : TEMPLATES.map(t=>t.id);
-  if(!imagesOn()){ favs = favs.filter(f=>!refInfo(f)); if(!favs.length) favs = TEMPLATES.map(t=>t.id); }
+  const favs = stylePool();
   const last = S.posts[0] && S.posts[0].tpl;
   const opts = favs.length > 1 ? favs.filter(f=>f!==last) : favs;
   return opts[Math.floor(Math.random()*opts.length)];
@@ -604,32 +607,35 @@ function refsSection(){
   const list = REFS.map(r=>refInfo("ref:"+r.id)).filter(Boolean), mine = S.customRefs.map(r=>refInfo("cref:"+r.id)).filter(Boolean);
   return `
   <section class="stack-sm">
-    <h2>Estilos com IA</h2>
-    <p class="muted">Em cada post, a IA escreve um prompt exclusivo para o conteúdo, tirando as ideias destas referências de mercado. Em “Criação livre” ela escolhe as referências que combinam com o assunto; marcando uma referência, ela usa aquela como base, com o seu texto, as suas cores${S.fotoIds.length ? " e a sua foto" : ""}. Cada post usa 1 imagem do seu limite do mês.</p>
     ${refUploadStatus()}
     <div class="ref-grid">
-      <div class="ref-card add"><label class="im" for="refInput"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Enviar minha referência</span></label><input id="refInput" type="file" accept="image/*" hidden></div>
-      ${autoCard()}
+${autoCard()}
+            <div class="ref-card add"><label class="im" for="refInput"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Enviar minha referência</span></label><input id="refInput" type="file" accept="image/*" hidden></div>
       ${mine.map(r=>refCard(r, S.favs.includes(r.id))).join("")}
       ${list.map(r=>refCard(r, S.favs.includes(r.id))).join("")}
     </div>
-  </section>
-  <h2>Estilos prontos</h2>`;
+  </section>`;
 }
-VIEWS.estilos = () => `
+VIEWS.estilos = () => imagesOn() ? `
 <div class="stack">
   <div class="stack-sm">
     <h1>Estilos</h1>
-    <p class="muted">Marque os estilos que combinam com você. Os próximos posts saem só nos estilos marcados. As prévias já usam sua logo, suas cores${S.fotoIds.length ? " e suas fotos" : ""}.</p>
-    ${!S.fotoIds.length ? `<div class="notice warn"><div>Os estilos com foto ficam melhores com fotos suas. <button class="link" data-act="edit-brand" style="padding:0">Adicionar fotos</button></div></div>` : ""}
+    <p class="muted">Escolha de quais referências a IA vai tirar as ideias para criar suas artes. Deixe só <b>Criação livre</b> marcada para a IA escolher sozinha a melhor referência para cada assunto, ou marque as que você mais gosta. Você também pode enviar uma referência sua.</p>
+    ${!S.fotoIds.length ? `<div class="notice warn"><div>Com uma foto sua, você aparece nas artes. <button class="link" data-act="edit-brand" style="padding:0">Adicionar fotos</button></div></div>` : ""}
   </div>
   ${refsSection()}
+</div>` : `
+<div class="stack">
+  <div class="stack-sm">
+    <h1>Estilos</h1>
+    <p class="muted">Marque os estilos que combinam com você. Os próximos posts saem só nos estilos marcados.</p>
+  </div>
   <div class="styles">${TEMPLATES.map(t=>{ const on = S.favs.includes(t.id); return `
     <div class="style-card">
       <button class="im" data-act="style-open" data-id="${t.id}" id="st_${t.id}" aria-label="Ver o estilo ${esc(t.nome)}"></button>
       <div class="row" style="justify-content:space-between;gap:6px;flex-wrap:nowrap">
-        <div style="min-width:0"><b>${esc(t.nome)}</b>${t.foto?` <span class="pill neutral" style="padding:1px 8px;font-size:.75rem">foto</span>`:""}</div>
-        <button class="fav" data-act="fav" data-id="${t.id}" aria-pressed="${on}" aria-label="${on?"Desmarcar":"Marcar"} ${esc(t.nome)}">${on?"✓ Usando":"Usar"}</button>
+        <div style="min-width:0"><b>${esc(t.nome)}</b></div>
+        <button class="fav" data-act="fav" data-id="${t.id}" aria-pressed="${on}">${on?"✓ Usando":"Usar"}</button>
       </div>
       <span class="small muted">${esc(t.desc)}</span>
     </div>`; }).join("")}</div>
@@ -638,6 +644,7 @@ after.estilos = async () => {
   const ri = $("#refInput"); if(ri) ri.addEventListener("change", ()=>{ const f = ri.files && ri.files[0]; if(f) uploadRef(f); });
   for(const im of document.querySelectorAll(".ref-card img[data-path]")){ Plat.url(im.dataset.path).then(u=>{ if(u) im.src = u; }); }
   for(const t of TEMPLATES){
+    if(!document.getElementById("st_"+t.id)) break;
     const r = await renderPost(demoPost(t.id), {key:"st-"+t.id, thumb:true, only:0});
     const el = document.getElementById("st_"+t.id); if(el && r[0]) el.innerHTML = `<img alt="" src="${r[0].url}">`;
   }
@@ -1027,7 +1034,7 @@ function act(a, d, el){
       break;
     case "fav": {
       const id = d.id, k = S.favs.indexOf(id);
-      if(k>=0){ if(S.favs.length===1){ toast("Deixe pelo menos um estilo marcado."); return; } S.favs.splice(k,1); } else S.favs.push(id);
+      if(k>=0){ const same = S.favs.filter(f=>!!refInfo(f) === !!refInfo(id)); if(same.length===1){ toast("Deixe pelo menos um estilo marcado."); return; } S.favs.splice(k,1); } else S.favs.push(id);
       save(); render(); break;
     }
     case "style-open": styleDetail = d.id; go("estilo"); break;
@@ -1052,7 +1059,7 @@ function act(a, d, el){
     case "post-back": go(current && current.fromHistory ? "historico" : "home"); break;
     case "slide": { const total = slidesFor(current).length; slideIdx = Math.max(0, Math.min(total-1, slideIdx + (+d.d))); render(); break; }
     case "tpl-next": {
-      const pool = S.favs.length > 1 ? S.favs : TEMPLATES.map(t=>t.id);
+      let pool = stylePool(); if(pool.length < 2) pool = imagesOn() ? ["ref:auto"].concat(REFS.map(r=>"ref:"+r.id)) : TEMPLATES.map(t=>t.id);
       const k = pool.indexOf(current.tpl); current.tpl = pool[(k+1) % pool.length];
       if(styleUsesPhoto(current.tpl) && !current.foto) current.foto = pickFoto();
       current.rev = (current.rev||0)+1; save(); render(); toast("Estilo " + styleName(current.tpl));
