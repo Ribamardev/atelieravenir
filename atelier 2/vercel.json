@@ -1,0 +1,14 @@
+{
+  "outputDirectory": "public",
+  "functions": {
+    "api/text.js": {
+      "maxDuration": 60
+    },
+    "api/image.js": {
+      "maxDuration": 180
+    },
+    "api/refprompt.js": {
+      "maxDuration": 60
+    }
+  }
+}
