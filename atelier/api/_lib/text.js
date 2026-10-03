@@ -55,3 +55,36 @@ function upstream(status, message) {
   if (status === 429) return httpError(429, "rate_limited", "A IA está recebendo muitos pedidos. Tente em instantes.");
   return httpError(502, "upstream_error", message);
 }
+
+/** Lê uma imagem (referência) e devolve JSON a partir do pedido. Usa OpenAI se houver chave, senão Anthropic. */
+export async function describeImage(buffer, mime, instruction) {
+  const b64 = Buffer.from(buffer).toString("base64");
+  const type = /png|webp|gif/.test(mime || "") ? mime : "image/jpeg";
+  if (env("OPENAI_API_KEY")) {
+    const model = env("OPENAI_VISION_MODEL") || env("OPENAI_TEXT_MODEL", "gpt-6.1-sol");
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env("OPENAI_API_KEY")}`, "content-type": "application/json" },
+      body: JSON.stringify({ model, messages: [{ role: "system", content: SYSTEM }, { role: "user", content: [
+        { type: "text", text: instruction },
+        { type: "image_url", image_url: { url: `data:${type};base64,${b64}` } }
+      ] }] }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw upstream(r.status, j?.error?.message || "Erro na OpenAI.");
+    return parseJsonLoose(j.choices?.[0]?.message?.content || "");
+  }
+  const key = env("ANTHROPIC_API_KEY");
+  if (!key) throw httpError(500, "config", "Nenhuma chave de IA configurada.");
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({ model: env("ANTHROPIC_MODEL", "claude-sonnet-5-5"), max_tokens: 3000, system: SYSTEM, messages: [{ role: "user", content: [
+      { type: "image", source: { type: "base64", media_type: type, data: b64 } },
+      { type: "text", text: instruction }
+    ] }] }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw upstream(r.status, j?.error?.message || "Erro na Anthropic.");
+  return parseJsonLoose((j.content || []).filter(c => c.type === "text").map(c => c.text).join(""));
+}

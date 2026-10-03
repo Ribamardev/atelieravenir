@@ -36,6 +36,23 @@ export async function cutoutPerson(photoBuffer, photoType = "image/jpeg") {
   return { buffer: await unpack(r), contentType: "image/png", ext: "png" };
 }
 
+/** Post completo: com foto do médico usa "edits" (a pessoa entra na arte); sem foto usa "generations". */
+export async function generatePost(prompt, person) {
+  if (person && person.buffer) {
+    const form = new FormData();
+    form.append("model", model());
+    form.append("image[]", new Blob([person.buffer], { type: person.type || "image/png" }), "medico." + ((person.type || "").includes("png") ? "png" : "jpg"));
+    form.append("prompt", prompt);
+    form.append("size", "1024x1536");
+    form.append("quality", quality());
+    form.append("output_format", "jpeg");
+    form.append("input_fidelity", "high");
+    const r = await fetch(`${OPENAI}/images/edits`, { method: "POST", headers: { Authorization: `Bearer ${key()}` }, body: form });
+    return { buffer: await unpack(r), contentType: "image/jpeg", ext: "jpg" };
+  }
+  return generateBackground(prompt, "1024x1536");
+}
+
 const CUTOUT_PROMPT = "Remova completamente o fundo desta foto e deixe somente a pessoa, com fundo 100% transparente. " +
   "Mantenha o rosto, a expressão, o cabelo, a pele, as roupas e as cores exatamente como estão, sem embelezar nem mudar traços. " +
   "Contorno limpo e natural no cabelo. Enquadramento do topo da cabeça até a cintura, pessoa centralizada, sem cortar a cabeça. " +

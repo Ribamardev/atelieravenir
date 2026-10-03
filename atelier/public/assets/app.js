@@ -58,9 +58,22 @@ function defaults(){
   return {v:2, onboarded:false,
     profile:{nome:"",especialidade:"",cidade:"",medico:"",crm:"",rqe:"",servicos:"",publico:[],diferencial:"",tom:"",instagram:"",whatsapp:""},
     brand:{logo:"",cor1:"#0057F0",cor2:"#8FB4FF"},
-    favs: TEMPLATES.map(t=>t.id), fotoIds:[], cutouts:{},
+    favs: TEMPLATES.map(t=>t.id), fotoIds:[], cutouts:{}, customRefs:[],
     estrategia:null, today:null, posts:[], counter:0, updatedAt:0};
 }
+/* Estilos com IA = referências de mercado (ref:rXX) e referências enviadas pelo cliente (cref:id) */
+const REFS = window.ATELIER_REFS || [];
+function refInfo(id){
+  id = String(id||"");
+  if(id.startsWith("ref:")){ const r = REFS.find(x=>x.id===id.slice(4)); return r ? {id, refId:r.id, nome:r.nome, pessoa:!!r.pessoa, dark:!!r.dark, thumb:"/refs/"+r.id+".jpg"} : null; }
+  if(id.startsWith("cref:")){ const r = ((typeof S!=="undefined" && S && S.customRefs) || []).find(x=>x.id===id.slice(5)); return r ? {id, custom:r, nome:r.nome||"Minha referência", pessoa:!!r.temPessoa, dark:!!r.escuro, path:r.path} : null; }
+  return null;
+}
+function validStyle(id){ return TEMPLATES.some(t=>t.id===id) || /^ref:/.test(id) && !!refInfo(id) || /^cref:/.test(id); }
+function styleName(id){ const r = refInfo(id); return r ? r.nome : getTpl(id).nome; }
+function styleUsesPhoto(id){ const r = refInfo(id); return r ? r.pessoa : !!getTpl(id).foto; }
+function imagesOn(){ return !!(window.Plat && Plat.config && Plat.config.imagesEnabled); }
+
 function merge(base, saved){
   if(!saved || typeof saved!=="object") return base;
   const out = Object.assign({}, base, saved);
@@ -69,7 +82,8 @@ function merge(base, saved){
   if(!Array.isArray(out.profile.publico)) out.profile.publico = [];
   if(!Array.isArray(out.posts)) out.posts = [];
   if(!Array.isArray(out.favs) || !out.favs.length) out.favs = base.favs;
-  out.favs = out.favs.filter(id=>TEMPLATES.some(t=>t.id===id)); if(!out.favs.length) out.favs = base.favs;
+  if(!Array.isArray(out.customRefs)) out.customRefs = [];
+  out.favs = out.favs.filter(validStyle); if(!out.favs.length) out.favs = base.favs;
   if(!Array.isArray(out.fotoIds)) out.fotoIds = [];
   if(!out.cutouts || typeof out.cutouts !== "object") out.cutouts = {};
   out.posts.forEach(p=>{ if(!p.tpl) p.tpl = "impacto"; if(!p.topo) p.topo = []; });
@@ -179,10 +193,12 @@ async function buildT(opts){
 }
 async function renderPost(post, opts){
   opts = opts || {};
-  const key = (opts.key || post.id) + "|" + (post.rev||0) + "|" + brandRev + "|" + post.tpl + "|" + (post.foto||"") + "|" + ((post.bgs||{})[post.tpl]||"") + "|" + (S.cutouts[post.foto]||"") + "|" + (opts.only!=null?opts.only:"all") + "|" + (opts.thumb?1:0);
+  const key = (opts.key || post.id) + "|" + (post.rev||0) + "|" + brandRev + "|" + post.tpl + "|" + (post.foto||"") + "|" + ((post.bgs||{})[post.tpl]||"") + "|" + (S.cutouts[post.foto]||"") + "|" + ((post.full||{})[post.tpl]||"") + "|" + (opts.only!=null?opts.only:"all") + "|" + (opts.thumb?1:0);
   if(!opts.nocache && imgCache.has(key)) return imgCache.get(key);
   const T = await buildT(opts);
-  const A = {ph: await getFotoImg(post.foto), bg: await getFotoImg((post.bgs||{})[post.tpl]), cut: post.foto ? await getFotoImg(S.cutouts[post.foto]) : null};
+  const ri = refInfo(post.tpl); post.refDark = ri ? ri.dark : false;
+  const A = ri ? {full: await getFotoImg((post.full||{})[post.tpl])}
+    : {ph: await getFotoImg(post.foto), bg: await getFotoImg((post.bgs||{})[post.tpl]), cut: post.foto ? await getFotoImg(S.cutouts[post.foto]) : null};
   const n = slidesFor(post).length, out = [];
   for(let i=0;i<n;i++){
     if(opts.only!=null && i!==opts.only) continue;
@@ -462,7 +478,7 @@ VIEWS.marca = () => {
     <h3>Suas fotos</h3>
     <p class="small muted">Fotos suas, da equipe ou da clínica deixam os posts muito mais fortes. Prefira fotos verticais, com boa luz e fundo simples. Até 6 fotos.</p>
     <div class="photos">
-      ${S.fotoIds.map(id=>`<div class="photo"><img data-path="${esc(id)}" alt="Sua foto"><button type="button" class="x" data-act="foto-del" data-id="${esc(id)}" aria-label="Remover foto">×</button></div>`).join("")}
+      ${S.fotoIds.map(id=>`<div class="photo"><img data-path="${esc(S.cutouts[id]||id)}" alt="Sua foto"${S.cutouts[id]?' style="background:#e9edf2;object-fit:contain"':""}>${S.cutouts[id] ? `<span class="tag ok">Fundo removido ✓</span>` : (cutJobs[id] ? `<span class="tag">${cutJobs[id]==="err" ? "Não recortou" : "Removendo fundo…"}</span>` : "")}<button type="button" class="x" data-act="foto-del" data-id="${esc(id)}" aria-label="Remover foto">×</button></div>`).join("")}
       ${S.fotoIds.length < 6 ? `<label class="photo add" for="fotoInput"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span class="small">Adicionar</span></label>` : ""}
     </div>
     <input id="fotoInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
@@ -522,11 +538,11 @@ after.marca = () => {
         const data = await compressPhoto(f); if(!data) continue;
         const blob = await (await fetch(data)).blob();
         const path = await Plat.upload("fotos", blob, "jpg");
-        S.fotoIds.push(path); added++;
+        S.fotoIds.push(path); added++; autoCutout(path);
       }catch(e){}
     }
     save(); brandRev++;
-    toast(added ? (added>1 ? added+" fotos adicionadas" : "Foto adicionada") : "Não foi possível ler essas fotos.");
+    toast(added ? (added>1 ? added+" fotos adicionadas" : "Foto adicionada") + (imagesOn() ? ". Estamos removendo o fundo." : "") : "Não foi possível ler essas fotos.");
     render();
   });
   ["cor1","cor2"].forEach(k=>{
@@ -537,7 +553,58 @@ after.marca = () => {
   });
 };
 
+/* Recorte automático: quando o médico envia uma foto, a IA remove o fundo (1 vez por foto) */
+const cutJobs = {};
+async function autoCutout(path){
+  if(!imagesOn() || S.cutouts[path] || cutJobs[path]==="busy") return;
+  cutJobs[path] = "busy"; if(view==="marca") render();
+  try{
+    const r = await Plat.api("/api/image", {kind:"cutout", photoPath:path});
+    if(S.fotoIds.includes(path)){ S.cutouts[path] = r.path; brandRev++; save(); } else Plat.remove([r.path]).catch(()=>{});
+    delete cutJobs[path];
+  }catch(e){ cutJobs[path] = "err"; }
+  if(view==="marca") render();
+}
+function refUploadStatus(){ return refUp.busy ? `<div class="ai-status"><div class="spinner" aria-hidden="true"></div><span>Lendo sua referência e criando o prompt… leva uns 20 segundos.</span></div>` : (refUp.error ? `<div class="notice warn"><div>${esc(refUp.error)}</div></div>` : ""); }
+let refUp = {busy:false, error:""};
+async function uploadRef(file){
+  refUp = {busy:true, error:""}; render();
+  try{
+    const data = await compressPhoto(file); if(!data) throw {code:"bad_image"};
+    const blob = await (await fetch(data)).blob();
+    const path = await Plat.upload("refs", blob, "jpg");
+    const r = await Plat.api("/api/refprompt", {imagePath:path});
+    const id = uid();
+    S.customRefs.unshift({id, path, prompt:String(r.prompt||""), temPessoa:!!r.temPessoa, escuro:!!r.escuro, nome:"Minha referência " + (S.customRefs.length+1)});
+    S.favs.push("cref:"+id); save();
+    refUp = {busy:false, error:""}; toast("Referência adicionada e marcada para os próximos posts");
+  }catch(e){ refUp = {busy:false, error: e && e.code==="bad_image" ? "Não foi possível ler essa imagem. Tente um JPG ou PNG." : errMsg(e)}; }
+  render();
+}
+
 /* Estilos */
+function refCard(r, on){ return `
+    <div class="ref-card">
+      <button class="im ${on?"on":""}" data-act="style-open" data-id="${esc(r.id)}" aria-label="Ver o estilo ${esc(r.nome)}">${r.thumb ? `<img alt="" loading="lazy" src="${r.thumb}">` : `<img alt="" data-path="${esc(r.path)}">`}${on?`<span class="chk">✓</span>`:""}</button>
+      <button class="fav" data-act="fav" data-id="${esc(r.id)}" aria-pressed="${on}">${on?"✓ Usando":"Usar"}</button>
+      <span class="nm">${esc(r.nome)}</span>
+    </div>`; }
+function refsSection(){
+  if(!imagesOn()) return "";
+  const list = REFS.map(r=>refInfo("ref:"+r.id)).filter(Boolean), mine = S.customRefs.map(r=>refInfo("cref:"+r.id)).filter(Boolean);
+  return `
+  <section class="stack-sm">
+    <h2>Estilos com IA</h2>
+    <p class="muted">A IA recria a arte no estilo destas referências de mercado, com o seu texto, as suas cores${S.fotoIds.length ? " e a sua foto" : ""}. Cada post usa 1 imagem do seu limite do mês.</p>
+    ${refUploadStatus()}
+    <div class="ref-grid">
+      <div class="ref-card add"><label class="im" for="refInput"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Enviar minha referência</span></label><input id="refInput" type="file" accept="image/*" hidden></div>
+      ${mine.map(r=>refCard(r, S.favs.includes(r.id))).join("")}
+      ${list.map(r=>refCard(r, S.favs.includes(r.id))).join("")}
+    </div>
+  </section>
+  <h2>Estilos prontos</h2>`;
+}
 VIEWS.estilos = () => `
 <div class="stack">
   <div class="stack-sm">
@@ -545,6 +612,7 @@ VIEWS.estilos = () => `
     <p class="muted">Marque os estilos que combinam com você. Os próximos posts saem só nos estilos marcados. As prévias já usam sua logo, suas cores${S.fotoIds.length ? " e suas fotos" : ""}.</p>
     ${!S.fotoIds.length ? `<div class="notice warn"><div>Os estilos com foto ficam melhores com fotos suas. <button class="link" data-act="edit-brand" style="padding:0">Adicionar fotos</button></div></div>` : ""}
   </div>
+  ${refsSection()}
   <div class="styles">${TEMPLATES.map(t=>{ const on = S.favs.includes(t.id); return `
     <div class="style-card">
       <button class="im" data-act="style-open" data-id="${t.id}" id="st_${t.id}" aria-label="Ver o estilo ${esc(t.nome)}"></button>
@@ -556,12 +624,27 @@ VIEWS.estilos = () => `
     </div>`; }).join("")}</div>
 </div>`;
 after.estilos = async () => {
+  const ri = $("#refInput"); if(ri) ri.addEventListener("change", ()=>{ const f = ri.files && ri.files[0]; if(f) uploadRef(f); });
+  for(const im of document.querySelectorAll(".ref-card img[data-path]")){ Plat.url(im.dataset.path).then(u=>{ if(u) im.src = u; }); }
   for(const t of TEMPLATES){
     const r = await renderPost(demoPost(t.id), {key:"st-"+t.id, thumb:true, only:0});
     const el = document.getElementById("st_"+t.id); if(el && r[0]) el.innerHTML = `<img alt="" src="${r[0].url}">`;
   }
 };
 VIEWS.estilo = () => {
+  const ri = refInfo(styleDetail);
+  if(ri){ const on = S.favs.includes(ri.id); return `
+<div class="stack">
+  <button class="link" data-act="nav" data-to="estilos" style="align-self:flex-start">← Estilos</button>
+  <h1>${esc(ri.nome)}</h1>
+  <p class="muted">Referência de estilo. A IA cria uma arte nova neste visual, com o tema do post, o seu texto e as suas cores${ri.pessoa ? (S.fotoIds.length ? ", usando a sua foto no lugar da pessoa" : ". Adicione uma foto sua para aparecer no lugar da pessoa") : ""}. O CRM e o @ entram embaixo, sempre certos.</p>
+  <div class="ref-big"><img id="refBig" alt="Referência" ${ri.thumb ? `src="${ri.thumb}"` : ""}></div>
+  <div class="grid2">
+    <button class="btn ${on?"btn-ghost":"btn-primary"}" data-act="fav" data-id="${esc(ri.id)}">${on?"Parar de usar":"Usar este estilo"}</button>
+    <button class="btn btn-primary" data-act="style-create" data-id="${esc(ri.id)}">Criar post neste estilo</button>
+  </div>
+  ${ri.custom ? `<button class="link" data-act="cref-del" data-id="${esc(ri.custom.id)}" style="align-self:center">Apagar esta referência</button>` : ""}
+</div>`; }
   const t = getTpl(styleDetail), on = S.favs.includes(t.id);
   return `
 <div class="stack">
@@ -576,6 +659,8 @@ VIEWS.estilo = () => {
 </div>`;
 };
 after.estilo = async () => {
+  const ri = refInfo(styleDetail);
+  if(ri){ if(ri.path){ const u = await Plat.url(ri.path); const im = $("#refBig"); if(u && im) im.src = u; } return; }
   const r = await renderPost(demoPost(styleDetail, "carrossel"), {key:"det-"+styleDetail, thumb:true});
   const el = $("#detailStrip"); if(el) el.innerHTML = r.map((x,i)=>`<div class="ds"><img alt="Lâmina ${i+1}" src="${x.url}"></div>`).join("");
 };
@@ -690,14 +775,27 @@ async function createPost(tema, formato, keepTpl){
 
 /* Imagens com IA (OpenAI) */
 const aiJobs = {};
-function needsBg(post){ const t = getTpl(post.tpl); return !!((t.aiBg && !(t.photoBg && post.foto)) || (t.bandBg && !post.foto)); }
-function needsCut(post){ const t = getTpl(post.tpl); return !!(t.needsCut && post.foto && !S.cutouts[post.foto]); }
-function missingAI(post){ return (needsBg(post) && !(post.bgs||{})[post.tpl]) || needsCut(post); }
+function needsFull(post){ return !!refInfo(post.tpl); }
+function needsBg(post){ if(refInfo(post.tpl)) return false; const t = getTpl(post.tpl); return !!((t.aiBg && !(t.photoBg && post.foto)) || (t.bandBg && !post.foto)); }
+function needsCut(post){ if(refInfo(post.tpl)) return false; const t = getTpl(post.tpl); return !!(t.needsCut && post.foto && !S.cutouts[post.foto]); }
+function missingAI(post){ return (needsFull(post) && !(post.full||{})[post.tpl]) || (needsBg(post) && !(post.bgs||{})[post.tpl]) || needsCut(post); }
 function refreshPost(post){ if(view==="post" && current===post && !editing) render(); }
 async function makeAssets(post, forceBg){
   if(!Plat.config || !Plat.config.imagesEnabled) return;
   const job = aiJobs[post.id] = {busy:true, error:"", msg:""};
   try{
+    const ri = refInfo(post.tpl);
+    if(ri && (forceBg || !(post.full||{})[post.tpl])){
+      const tpl = post.tpl, s0 = post.slides[0] || {};
+      const foto = ri.pessoa && post.foto ? (S.cutouts[post.foto] || post.foto) : "";
+      job.msg = "A IA está criando a arte neste estilo" + (foto ? ", com a sua foto" : "") + "… leva cerca de 1 minuto."; refreshPost(post);
+      const body = {kind:"post", tema:post.tema, especialidade:S.profile.especialidade, topo:post.topo, pre:s0.pre, titulo:s0.titulo, apoio:s0.apoio, c1:S.brand.cor1, c2:S.brand.cor2, photoPath:foto};
+      if(ri.refId) body.refId = ri.refId; else { body.refPrompt = ri.custom.prompt; body.temPessoa = ri.pessoa; }
+      const old = (post.full||{})[tpl];
+      const r = await Plat.api("/api/image", body);
+      post.full = Object.assign({}, post.full, {[tpl]: r.path}); post.rev = (post.rev||0)+1; save();
+      if(old) Plat.remove([old]).catch(()=>{});
+    }
     if(needsCut(post)){
       job.msg = "Recortando você da foto… (só na primeira vez)"; refreshPost(post);
       const r = await Plat.api("/api/image", {kind:"cutout", photoPath:post.foto});
@@ -718,8 +816,8 @@ function aiBlock(post){
   const job = aiJobs[post.id];
   if(job && job.busy) return `<div class="ai-status"><div class="spinner" aria-hidden="true"></div><span>${esc(job.msg || "Criando imagem…")}</span></div>`;
   if(job && job.error) return `<div class="stack-sm"><div class="notice warn"><div>${esc(job.error)}</div></div><button class="btn btn-ghost btn-block" data-act="ai-make">Tentar de novo</button></div>`;
-  if(missingAI(post)) return `<button class="btn btn-ghost btn-block" data-act="ai-make">Criar imagem com IA para este estilo</button><p class="small muted" style="text-align:center;margin-top:-6px">Usa 1 imagem do seu limite do mês.</p>`;
-  if(needsBg(post)) return `<button class="link" data-act="ai-new" style="align-self:center">Gerar outra imagem com IA</button>`;
+  if(missingAI(post)) return `<button class="btn btn-ghost btn-block" data-act="ai-make">${needsFull(post) ? "Criar a arte com IA" : "Criar imagem com IA para este estilo"}</button><p class="small muted" style="text-align:center;margin-top:-6px">Usa 1 imagem do seu limite do mês.</p>`;
+  if(needsBg(post) || needsFull(post)) return `<button class="link" data-act="ai-new" style="align-self:center">Gerar outra imagem com IA</button>`;
   return "";
 }
 
@@ -727,7 +825,7 @@ function aiBlock(post){
 VIEWS.post = () => {
   const post = current; if(!post) return VIEWS.home();
   if(editing) return editView(post);
-  const total = slidesFor(post).length, t = getTpl(post.tpl);
+  const total = slidesFor(post).length, usesPhoto = styleUsesPhoto(post.tpl);
   const caption = (post.legenda||"") + (post.hashtags && post.hashtags.length ? "\n\n" + post.hashtags.join(" ") : "");
   const comp = post.alertas && post.alertas.length
     ? `<div class="notice warn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:none"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v4M12 17.5v.5"/></svg><div><b>Confira antes de publicar</b><ul>${post.alertas.map(a=>`<li>${esc(a)}</li>`).join("")}</ul></div></div>`
@@ -735,7 +833,7 @@ VIEWS.post = () => {
   return `
 <div class="stack">
   <button class="link" data-act="post-back" style="align-self:flex-start">← ${post.fromHistory ? "Meus posts" : "Hoje"}</button>
-  <div class="stack-sm"><h2>${esc(post.tema)}</h2><span class="small muted">Estilo ${esc(t.nome)}</span></div>
+  <div class="stack-sm"><h2>${esc(post.tema)}</h2><span class="small muted">Estilo ${esc(styleName(post.tpl))}${refInfo(post.tpl) ? " · arte criada com IA" : ""}</span></div>
   <div class="post-stage" id="stage"><div class="skeleton" style="padding:24px"><div></div><div style="width:70%"></div></div></div>
   ${total > 1 ? `<div class="stage-nav"><button class="round" data-act="slide" data-d="-1" aria-label="Lâmina anterior" ${slideIdx===0?"disabled":""}>‹</button>
     <div class="stack-sm" style="align-items:center"><div class="dots">${Array.from({length:total},(_,i)=>`<i class="${i===slideIdx?"on":""}"></i>`).join("")}</div><span class="small muted">Lâmina ${slideIdx+1} de ${total}</span></div>
@@ -752,7 +850,7 @@ VIEWS.post = () => {
     <button class="btn btn-ghost" data-act="tpl-next">Mudar estilo</button>
     <button class="btn btn-ghost" data-act="edit">Editar textos</button>
   </div>
-  ${t.foto ? (S.fotoIds.length ? `<button class="btn btn-ghost btn-block" data-act="foto-next">${post.foto ? "Trocar foto" : "Usar uma foto"}</button>${post.foto?`<button class="link" data-act="foto-none" style="align-self:center">Tirar a foto deste post</button>`:""}` : `<button class="btn btn-line btn-block" data-act="edit-brand">Adicionar fotos para este estilo</button>`) : ""}
+  ${usesPhoto ? (S.fotoIds.length ? `<button class="btn btn-ghost btn-block" data-act="foto-next">${post.foto ? "Trocar foto" : "Usar uma foto"}</button>${post.foto?`<button class="link" data-act="foto-none" style="align-self:center">Tirar a foto deste post</button>`:""}` : `<button class="btn btn-line btn-block" data-act="edit-brand">Adicionar fotos para este estilo</button>`) : ""}
   <section class="stack-sm">
     <h3>Legenda</h3>
     <div class="caption" id="captionBox">${esc(caption)}</div>
@@ -918,6 +1016,11 @@ function act(a, d, el){
       save(); render(); break;
     }
     case "style-open": styleDetail = d.id; go("estilo"); break;
+    case "cref-del": {
+      const r = S.customRefs.find(x=>x.id===d.id); if(!r) break;
+      S.customRefs = S.customRefs.filter(x=>x!==r); S.favs = S.favs.filter(f=>f!=="cref:"+r.id); if(!S.favs.length) S.favs = TEMPLATES.map(t=>t.id);
+      Plat.remove([r.path]).catch(()=>{}); save(); toast("Referência apagada"); go("estilos"); break;
+    }
     case "style-create": draft.tpl = d.id; go("home"); setTimeout(()=>{ const box = $("#ownIdea"); if(box) box.scrollIntoView({behavior:"smooth", block:"start"}); const ta = $("#draftTxt"); ta && ta.focus({preventScroll:true}); }, 60); break;
     case "tpl-clear": draft.tpl = ""; render(); break;
     case "ideas": ideasState.error = ""; runIdeas(false); break;
@@ -936,10 +1039,12 @@ function act(a, d, el){
     case "tpl-next": {
       const pool = S.favs.length > 1 ? S.favs : TEMPLATES.map(t=>t.id);
       const k = pool.indexOf(current.tpl); current.tpl = pool[(k+1) % pool.length];
-      if(getTpl(current.tpl).foto && !current.foto) current.foto = pickFoto();
-      current.rev = (current.rev||0)+1; save(); render(); toast("Estilo " + getTpl(current.tpl).nome); break;
+      if(styleUsesPhoto(current.tpl) && !current.foto) current.foto = pickFoto();
+      current.rev = (current.rev||0)+1; save(); render(); toast("Estilo " + styleName(current.tpl));
+      if(refInfo(current.tpl) && missingAI(current)) makeAssets(current);
+      break;
     }
-    case "foto-next": { const ids = S.fotoIds; const k = ids.indexOf(current.foto); current.foto = ids[(k+1) % ids.length]; current.rev = (current.rev||0)+1; save(); render(); break; }
+    case "foto-next": { const ids = S.fotoIds; const k = ids.indexOf(current.foto); current.foto = ids[(k+1) % ids.length]; current.rev = (current.rev||0)+1; save(); render(); if(refInfo(current.tpl)) makeAssets(current, true); break; }
     case "foto-none": current.foto = ""; current.rev = (current.rev||0)+1; save(); render(); break;
     case "edit": editing = true; render(); window.scrollTo(0,0); break;
     case "edit-cancel": editing = false; render(); break;
@@ -953,7 +1058,7 @@ function act(a, d, el){
       p.cta = v("e_cta").slice(0,40); p.legenda = document.getElementById("e_leg").value;
       p.hashtags = v("e_hash").split(/\s+/).filter(Boolean).map(h=>h[0]==="#"?h:"#"+h);
       p.alertas = Array.from(new Set((p.alertas||[]).filter(x=>!x.startsWith("Revise a expressão")).concat(localCheck(p))));
-      p.rev = (p.rev||0)+1; editing = false; save(); toast("Post atualizado"); render(); window.scrollTo(0,0); break;
+      p.rev = (p.rev||0)+1; editing = false; save(); toast(refInfo(p.tpl) ? "Textos salvos. Toque em “Gerar outra imagem com IA” para a arte usar o texto novo." : "Post atualizado"); render(); window.scrollTo(0,0); break;
     }
     case "copy": {
       const txt = (current.legenda||"") + (current.hashtags && current.hashtags.length ? "\n\n" + current.hashtags.join(" ") : "");

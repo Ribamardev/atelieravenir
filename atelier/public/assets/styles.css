@@ -201,3 +201,18 @@ input::placeholder,textarea::placeholder{color:var(--muted);opacity:.8}
 .ai-status{display:flex;align-items:center;gap:10px;font-size:.95rem;color:var(--muted)}
 .ai-status .spinner{width:22px;height:22px;border-width:3px}
 .usage{font-size:.85rem;color:var(--muted)}
+
+/* Estilos com IA */
+.photo .tag{position:absolute;left:6px;bottom:6px;padding:2px 8px;border-radius:999px;font-size:.72rem;font-weight:600;background:rgba(0,0,0,.65);color:#fff}
+.photo .tag.ok{background:rgba(16,122,64,.9)}
+.ref-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media (min-width:640px){.ref-grid{grid-template-columns:repeat(4,1fr)}}
+.ref-card{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ref-card .im{position:relative;aspect-ratio:4/5;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--surface-2);padding:0;cursor:pointer}
+.ref-card .im img{display:block;width:100%;height:100%;object-fit:cover}
+.ref-card .im.on{outline:3px solid var(--brand,#0057F0);outline-offset:-3px}
+.ref-card .im .chk{position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;background:var(--brand,#0057F0);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9rem}
+.ref-card .nm{font-size:.78rem;line-height:1.2;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ref-card.add .im{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:2px dashed var(--line);color:var(--muted);background:var(--surface);font-size:.8rem;text-align:center}
+.ref-big{max-width:360px;width:100%;align-self:center;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
+.ref-big img{display:block;width:100%}

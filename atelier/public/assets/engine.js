@@ -556,7 +556,7 @@ tpl({id:"faixa", nome:"Faixa", desc:"Frase fina com palavra em caixa, faixa de f
     let y = 160;
     drawRich(ctx, P, W/2, y, pS, {align:"center", box:e=>e?acc:null, pad:P.size*.16}); y += P.h + 26;
     const band = ph || (A && A.bg);
-    if(band){ drawCover(ctx, band, 110, y, 860, 300, .5, .4, "grayscale(1) contrast(1.15)"); grainRect(ctx, 110, y, 860, 300); y += 330; }
+    if(band){ drawCover(ctx, band, 110, y, 860, 300, .5, ph ? .18 : .4, "grayscale(1) contrast(1.15)"); grainRect(ctx, 110, y, 860, 300); y += 330; }
     else { swoosh(ctx, W/2 - 300, y + 10, 600, acc); y += 90; }
     const tS = S2({f:F.mont9, color:"#161616", ls:-.04, upper:true}, {f:F.mont9, color:acc, ls:-.04, upper:true});
     const R = fitRich(ctx, c.pre ? c.titulo : c.apoio, tS, 860, 1150 - y - 120, 150, 60, .92);
@@ -689,9 +689,33 @@ function drawAIBg(ctx, t, img){
   ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
   grain(ctx,.4);
 }
+/* ---------- Estilos com IA (referências): a arte vem pronta da IA; o app só coloca a assinatura ---------- */
+function isRefTpl(id){ return /^c?ref:/.test(String(id || "")); }
+function drawRefCover(ctx, T, post, img){
+  if(img){
+    drawCover(ctx, img, 0, 0, W, H, .5, .5);
+  } else {
+    const g = ctx.createLinearGradient(0,0,W,H); g.addColorStop(0, mix(T.c1,"#000",.35)); g.addColorStop(1, mix(T.c1,"#000",.75));
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H); grain(ctx,.5);
+    setF(ctx, F.mont7, 40, 0); ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("A IA está criando a arte", W/2, H/2 - 30);
+    setF(ctx, F.mont4, 28, 0); ctx.fillStyle = "rgba(255,255,255,.7)"; ctx.fillText("neste estilo de referência…", W/2, H/2 + 24);
+  }
+  const b = ctx.createLinearGradient(0, H-200, 0, H); b.addColorStop(0,"rgba(0,0,0,0)"); b.addColorStop(1,"rgba(0,0,0,.62)");
+  ctx.fillStyle = b; ctx.fillRect(0, H-200, W, 200);
+  footer(ctx, T, "rgba(255,255,255,.95)", {y:1290});
+}
 function drawSlide(ctx, post, i, T, A){
   if(A && A.width) A = {ph:A};
   A = A || {};
+  if(isRefTpl(post.tpl)){
+    const list = slidesFor(post), sl = list[i], n = list.length, fb = getTpl(post.refDark ? "estudio" : "clareza");
+    ctx.save(); ctx.clearRect(0,0,W,H);
+    if(sl.kind === "capa") drawRefCover(ctx, T, post, A.full);
+    else if(sl.kind === "interna") innerSlide(ctx, fb, T, sl, post, i, n);
+    else ctaSlide(ctx, fb, T, post, i, n);
+    ctx.restore(); return;
+  }
   const t = getTpl(post.tpl), list = slidesFor(post), sl = list[i], n = list.length;
   ctx.save(); ctx.clearRect(0,0,W,H);
   if(sl.kind === "capa"){

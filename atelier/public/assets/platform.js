@@ -94,7 +94,7 @@
   };
   Plat.remove = async function(paths){ paths = (paths||[]).filter(Boolean); if(paths.length) await Plat.sb.storage.from("atelier-assets").remove(paths); };
   Plat.removeAll = async function(){
-    for(const folder of ["fotos","ai","cut"]){
+    for(const folder of ["fotos","ai","cut","post","refs"]){
       const { data } = await Plat.sb.storage.from("atelier-assets").list(`${Plat.user.id}/${folder}`, {limit:1000});
       if(data && data.length) await Plat.remove(data.map(f=>`${Plat.user.id}/${folder}/${f.name}`));
     }
