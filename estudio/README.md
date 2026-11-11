@@ -19,7 +19,7 @@ Sistema interno da Avenir para criar imagens base de Instagram (Feed 4:5 e Stori
 1. **Supabase**: no projeto do Atelier, abra o SQL Editor e rode `supabase/schema.sql`. Em Authentication → Users, crie o seu usuário (e-mail e senha).
 2. **Vercel**: crie um projeto novo apontando para este repositório com **Root Directory = `estudio`**. Em Environment Variables, coloque:
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (os mesmos do Atelier)
-   - `HIGGSFIELD_API_KEY_ID`, `HIGGSFIELD_API_KEY_SECRET` (console.higgsfield.ai)
+   - `HIGGSFIELD_API_KEY` (console.higgsfield.ai → botão "Copy API key", colar inteira)
    - `ANTHROPIC_API_KEY` (ou `OPENAI_API_KEY` + `OPENAI_MODEL`)
 3. **Modelos**: em Configurações, o "Soul 2 (só texto)" já vem ativo. Para gerar a partir das referências (Nano Banana Pro etc.), copie da página do modelo no console.higgsfield.ai o caminho do endpoint e o nome do campo de imagens, cole no modelo "Nano Banana Pro", marque **Ativo** e salve.
 

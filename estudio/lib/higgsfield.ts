@@ -5,9 +5,12 @@ import type { Model } from "./types";
 const BASE = "https://api.higgsfield.ai";
 
 function authHeader() {
+  // Aceita a chave única copiada do console (já no formato "ID:SECRET") ou as duas partes separadas.
+  const single = process.env.HIGGSFIELD_API_KEY?.trim().replace(/^Key\s+/i, "");
+  if (single) return `Key ${single}`;
   const id = process.env.HIGGSFIELD_API_KEY_ID;
   const secret = process.env.HIGGSFIELD_API_KEY_SECRET;
-  if (!id || !secret) throw new Error("Chave do Higgsfield não configurada (HIGGSFIELD_API_KEY_ID / _SECRET).");
+  if (!id || !secret) throw new Error("Chave do Higgsfield não configurada (HIGGSFIELD_API_KEY).");
   return `Key ${id}:${secret}`;
 }
 

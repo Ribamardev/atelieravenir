@@ -41,7 +41,7 @@ export default function Config() {
           </span>
         </div>
         <div className="note">
-          As chaves ficam só nas variáveis de ambiente da Vercel: HIGGSFIELD_API_KEY_ID, HIGGSFIELD_API_KEY_SECRET e
+          As chaves ficam só nas variáveis de ambiente da Vercel: HIGGSFIELD_API_KEY e
           ANTHROPIC_API_KEY (ou OPENAI_API_KEY + OPENAI_MODEL).
         </div>
       </div>
