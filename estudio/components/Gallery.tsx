@@ -55,7 +55,18 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
 
   useEffect(() => {
     load();
-  }, [load]);
+    // Retoma peças que ficaram em andamento (ex.: a tela de geração foi fechada antes de terminar)
+    sb()
+      .from("sm_jobs")
+      .select("*")
+      .eq("client_id", clientId)
+      .in("status", ["queued", "in_progress"])
+      .not("hf_request_id", "is", null)
+      .then(({ data }) => {
+        if (data?.length) track(data as any);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, clientId]);
 
   async function setReview(r: Row, review: Row["review"], feedback?: string) {
     await sb().from("sm_images").update({ review, feedback: feedback ?? r.feedback }).eq("id", r.id);
@@ -105,7 +116,7 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
             </button>
           ))}
         </div>
-        {running.length > 0 && <span className="pill warn">{running.length} refazendo…</span>}
+        {running.length > 0 && <span className="pill warn">{running.length} em andamento…</span>}
       </div>
 
       {shown.length === 0 ? (
