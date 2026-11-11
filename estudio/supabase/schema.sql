@@ -105,7 +105,7 @@ create policy "sm_media_auth" on storage.objects for all to authenticated
 -- Modelos iniciais. Confira os caminhos no console.higgsfield.ai e ajuste na tela Configurações.
 insert into sm_models (label, path, image_field, max_refs, aspect_ratios, extra, active, is_default)
 select 'Soul 2 (só texto)', '/higgsfield-ai/soul/v2/standard', null, 0,
-       '{9:16,4:5,3:4,1:1}', '{"resolution":"2K"}', true, true
+       '{9:16,3:4,2:3,1:1}', '{"resolution":"1080p"}', true, true
 where not exists (select 1 from sm_models);
 
 insert into sm_models (label, path, image_field, max_refs, aspect_ratios, extra, active, is_default)
