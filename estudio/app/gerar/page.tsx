@@ -25,7 +25,8 @@ function Generate() {
   const [brief, setBrief] = useState("");
   const [feedCount, setFeedCount] = useState(2);
   const [storyCount, setStoryCount] = useState(2);
-  const [variations, setVariations] = useState(2);
+  const [variations, setVariations] = useState(1);
+  const [withText, setWithText] = useState(true);
   const [pieces, setPieces] = useState<PlannedPiece[] | null>(null);
   const [busy, setBusy] = useState<"" | "plan" | "gen">("");
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +90,7 @@ function Generate() {
     const res = await fetch("/api/plan", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ clientId, referenceIds: selected, brief, feedCount, storyCount, modelId }),
+      body: JSON.stringify({ clientId, referenceIds: selected, brief, feedCount, storyCount, modelId, withText }),
     });
     const body = await res.json();
     setBusy("");
@@ -116,7 +117,8 @@ function Generate() {
     setPieces((cur) => cur!.map((p, j) => (j === i ? { ...p, ...patch } : p)));
   }
 
-  const canPlan = clientId && modelId && brief.trim() && feedCount + storyCount > 0 && !busy;
+  const listsPieces = /\n\s*\d+[.)]/.test("\n" + brief);
+  const canPlan = clientId && modelId && brief.trim() && (feedCount + storyCount > 0 || listsPieces) && !busy;
 
   return (
     <>
@@ -153,9 +155,22 @@ function Generate() {
           <textarea
             value={brief}
             onChange={(e) => setBrief(e.target.value)}
-            placeholder="Ex.: campanha de check-up cardíaco para executivos 40+. Clima acolhedor e premium, médico conversando com paciente, nada de hospital frio."
+            placeholder={'Descreva a campanha ou liste as peças. Ex.:\n1. Abertura (post único)\nImagem: cadeira de barbeiro vazia, feixe de luz quente, fundo verde escuro.\nTexto da arte: "Uma cadeira vazia. Um barbeiro sem cadeira." + "Em breve"'}
+            style={{ minHeight: 140 }}
           />
         </div>
+        <div className="row" style={{ gap: 8 }}>
+          <button className={withText ? "small" : "ghost small"} onClick={() => setWithText(true)}>Arte final com texto</button>
+          <button className={!withText ? "small" : "ghost small"} onClick={() => setWithText(false)}>Só imagem base</button>
+          <span style={{ fontSize: 13, color: "var(--muted)" }}>
+            {withText
+              ? "A IA escreve os textos do briefing na arte. O logo real entra no download."
+              : "Imagem sem texto, para diagramar depois."}
+          </span>
+        </div>
+        {listsPieces && (
+          <div className="note">O briefing lista as peças: o diretor de arte vai criar exatamente essas, ignorando as quantidades abaixo.</div>
+        )}
         <div className="grid g3">
           <div>
             <label>Peças de Feed (4:5)</label>
@@ -246,9 +261,14 @@ function Generate() {
           ))}
           <div className="row">
             <button disabled={!!busy || !pieces.length} onClick={generate}>
-              {busy === "gen" ? "Enviando ao Higgsfield…" : `Gerar ${total} imagens`}
+              {busy === "gen" ? "Enviando ao Higgsfield…" : `Gerar ${total} ${total === 1 ? "imagem" : "imagens"}`}
             </button>
             <button className="ghost" disabled={!!busy} onClick={plan}>Replanejar</button>
+            {model?.extra && (model.extra as any).quality && (
+              <span style={{ fontSize: 13, color: "var(--muted)" }}>
+                Qualidade de rascunho: {(model.extra as any).quality}. Gere a versão final em alta só da imagem aprovada, na galeria.
+              </span>
+            )}
           </div>
         </div>
       )}

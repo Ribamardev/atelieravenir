@@ -10,9 +10,9 @@ export async function POST(req: Request) {
   if (!supabase) return NextResponse.json({ error: "Faça login." }, { status: 401 });
 
   try {
-    const { clientId, referenceIds = [], brief, feedCount = 0, storyCount = 0, modelId } = await req.json();
+    const { clientId, referenceIds = [], brief, feedCount = 0, storyCount = 0, modelId, withText = true } = await req.json();
     if (!clientId || !brief) throw new Error("Escolha o cliente e escreva o briefing.");
-    if (feedCount + storyCount < 1) throw new Error("Peça pelo menos uma imagem.");
+    if (feedCount + storyCount < 1 && !/\n\s*\d+[.)]/.test("\n" + brief)) throw new Error("Peça pelo menos uma imagem.");
     if (feedCount + storyCount > 12) throw new Error("Máximo de 12 peças por vez.");
 
     const { data: client, error: ce } = await supabase.from("sm_clients").select("*").eq("id", clientId).single();
@@ -54,6 +54,7 @@ export async function POST(req: Request) {
       feedCount,
       storyCount,
       modelSeesImages: !!model?.image_field,
+      withText: !!withText,
     });
     return NextResponse.json({ pieces });
   } catch (e: any) {

@@ -74,7 +74,7 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
     setOpen((o) => (o && o.id === r.id ? { ...o, review, feedback: feedback ?? o.feedback } : o));
   }
 
-  async function redo(r: Row, extra: string) {
+  async function redo(r: Row, extra: string, override?: Record<string, unknown>) {
     if (!r.sm_jobs) return;
     setError(null);
     const prompt = extra.trim() ? `${r.sm_jobs.prompt} Adjustments: ${extra.trim()}` : r.sm_jobs.prompt;
@@ -85,7 +85,8 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
         clientId,
         modelId: r.sm_jobs.model_id,
         numImages: 1,
-        pieces: [{ ...r.sm_jobs, title: `${r.sm_jobs.title || "Peça"} (refeita)`, prompt }],
+        override,
+        pieces: [{ ...r.sm_jobs, title: `${r.sm_jobs.title || "Peça"} ${override ? "(final em alta)" : "(refeita)"}`, prompt }],
       }),
     });
     const body = await res.json();
@@ -185,7 +186,7 @@ function Detail({
   clientName: string;
   onClose: () => void;
   onReview: (r: Row, review: Row["review"], feedback?: string) => void;
-  onRedo: (r: Row, extra: string) => Promise<void>;
+  onRedo: (r: Row, extra: string, override?: Record<string, unknown>) => Promise<void>;
   onRemove: (r: Row) => void;
 }) {
   const [fb, setFb] = useState(row.feedback || "");
@@ -288,6 +289,18 @@ function Detail({
                 }}
               >
                 {busy ? "Enviando…" : "↻ Refazer com ajuste"}
+              </button>
+              <button
+                className="ghost"
+                disabled={busy}
+                title="Refaz esta peça com o mesmo prompt em qualidade alta (custa mais). Use só na aprovada."
+                onClick={async () => {
+                  setBusy(true);
+                  await onRedo(row, fb, { quality: "high" });
+                  setBusy(false);
+                }}
+              >
+                ★ Versão final em alta
               </button>
               <button className="danger small" onClick={() => onRemove(row)}>Apagar</button>
             </div>

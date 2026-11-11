@@ -10,17 +10,27 @@ export async function POST(req: Request) {
   if (!supabase) return NextResponse.json({ error: "Faça login." }, { status: 401 });
 
   try {
-    const { clientId, modelId, numImages = 1, pieces } = (await req.json()) as {
+    const { clientId, modelId, numImages = 1, pieces, override } = (await req.json()) as {
       clientId: string;
       modelId: string;
       numImages: number;
       pieces: PlannedPiece[];
+      override?: Record<string, unknown>; // ex.: {"quality":"high"} para a versão final
     };
     if (!pieces?.length) throw new Error("Nenhuma peça para gerar.");
 
     const { data: model, error: me } = await supabase.from("sm_models").select("*").eq("id", modelId).single();
     if (me || !model) throw new Error("Modelo não encontrado.");
-    const m = model as Model;
+    const m = { ...(model as Model) };
+    // Só aplica ajustes a parâmetros que o modelo já usa (ex.: quality), para não quebrar outros modelos
+    if (override && typeof override === "object") {
+      const allowed = Object.fromEntries(Object.entries(override).filter(([k]) => k in (m.extra || {})));
+      if (!Object.keys(allowed).length) throw new Error("Este modelo não tem ajuste de qualidade.");
+      m.extra = { ...(m.extra || {}), ...allowed };
+    }
+    const n = Math.min(Math.max(1, numImages), 4);
+    // Modelo sem campo de quantidade: uma requisição por variação
+    const copies = m.num_images_field ? 1 : n;
     if (!m.active) throw new Error(`O modelo "${m.label}" está desativado. Ative em Configurações.`);
 
     // Sobe cada referência ao Higgsfield uma única vez por requisição
@@ -38,7 +48,10 @@ export async function POST(req: Request) {
     }
 
     const results = [];
-    for (const p of pieces) {
+    const expanded = pieces.flatMap((p) =>
+      Array.from({ length: copies }, (_, k) => (copies > 1 ? { ...p, title: `${p.title} · v${k + 1}` } : p))
+    );
+    for (const p of expanded) {
       const aspect = pickAspect(m, p.format);
       const { data: job, error: je } = await supabase
         .from("sm_jobs")
@@ -70,7 +83,7 @@ export async function POST(req: Request) {
           prompt: p.prompt,
           aspect,
           imageUrls,
-          numImages: Math.min(Math.max(1, numImages), 4),
+          numImages: m.num_images_field ? n : 1,
           idempotencyKey: job.id,
         });
         await supabase

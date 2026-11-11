@@ -112,3 +112,11 @@ insert into sm_models (label, path, image_field, max_refs, aspect_ratios, extra,
 select 'Nano Banana Pro (com referências)', '/CONFIRMAR-NO-CONSOLE', 'image_urls', 8,
        '{9:16,4:5,3:4,1:1}', '{}', false, false
 where not exists (select 1 from sm_models where label like 'Nano Banana%');
+
+-- Modelo com referências + texto (catálogo da API em open.higgsfield.ai). Rascunho barato em "low";
+-- a versão final em alta é pedida na galeria ("quality":"high").
+update sm_models set is_default = false where label not like 'Marketing Studio%';
+insert into sm_models (label, path, image_field, image_field_is_list, max_refs, aspect_ratios, num_images_field, extra, active, is_default)
+select 'Marketing Studio Image (referências + texto)', '/marketing-studio/image', 'image_urls', true, 8,
+       '{9:16,3:4,2:3,1:1}', null, '{"resolution":"2k","quality":"low","enhance_prompt":false}', true, true
+where not exists (select 1 from sm_models where label like 'Marketing Studio%');

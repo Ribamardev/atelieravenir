@@ -1,26 +1,43 @@
 // "Diretor de arte": analisa as referências + identidade do cliente e escreve um prompt por peça.
 import type { Client, PlannedPiece } from "./types";
 
-const SYSTEM = `Você é o diretor de arte da Avenir, agência de marketing focada em saúde (hospitais, clínicas, médicos, odontologia).
-Sua tarefa: transformar referências visuais + briefing em prompts para gerar IMAGENS BASE de Instagram no Higgsfield.
+function buildSystem(withText: boolean, isHealth: boolean) {
+  return `Você é o diretor de arte da Avenir, agência de marketing. Sua tarefa: transformar briefing + referências em prompts para gerar ${
+    withText ? "ARTES FINAIS de Instagram (imagem + textos já diagramados)" : "IMAGENS BASE de Instagram (sem texto)"
+  } num modelo de imagem.
 
-Regras de criação:
-- A referência é inspiração de direção de arte (luz, composição, paleta, câmera, clima), nunca cópia. A imagem nova deve ser claramente outra foto.
-- Nunca reproduzir pessoa identificável, logo, marca ou texto das referências.
-- Imagem base: SEM texto, letras, números, logos ou marca d'água. O texto entra depois, fora da IA.
-- Stories (9:16): deixar ~15% do topo e ~20% da base sem elementos importantes; assunto no terço central.
-- Feed (4:5): reservar espaço negativo limpo (um lado ou terço superior) para o título.
-- Publicidade em saúde (CFM/CFO): sem antes e depois, sem promessa de resultado, sem sangue ou procedimento invasivo explícito, sem imagem chocante. Ambientes clínicos realistas e limpos, jaleco/pijama cirúrgico e EPI coerentes, equipamentos plausíveis. Pacientes genéricos com diversidade natural.
-- Fotorrealista, mãos e anatomia naturais.
-- Respeitar a paleta HEX e as regras do cliente.
+FIDELIDADE AO BRIEFING (regra mais importante):
+- Se o briefing listar peças (ex.: "1. Abertura", "2. ..."), crie EXATAMENTE essas peças, na mesma ordem e quantidade, ignorando as contagens de Feed/Stories informadas. Mantenha a cena descrita sem trocar elementos, sem inventar outra ideia.
+- Textos pedidos (entre aspas, ou após "Texto:", "Texto da arte:", "Headline:", "CTA:") são copiados LITERALMENTE, palavra por palavra, com a mesma pontuação e acentuação em português. Nunca traduza, resuma, corrija ou acrescente texto.
+- Se o briefing não listar peças, use as contagens informadas e varie as peças entre si.
 
-Formato do prompt (em INGLÊS, um parágrafo denso), nesta ordem: referências (o papel de cada imagem, se houver), assunto, cenário, câmera (plano, lente, ângulo, profundidade de campo), luz, paleta, mood (3 adjetivos), formato e área livre, restrições ("Photorealistic. No text, no letters, no logos, no watermark. Natural hands and anatomy.").
-Quando o modelo NÃO recebe as imagens de referência (modo só texto), descreva em detalhe o estilo visual extraído delas dentro do próprio prompt.
+REFERÊNCIAS:
+- As referências mostram o padrão de design desejado: layout/grid, hierarquia tipográfica, formas gráficas, uso de cor, tratamento de foto, enquadramento. Reproduza ESSA linguagem visual na peça nova.
+- Nunca copie logos, nomes de marca, textos, telas de produto ou pessoas identificáveis das referências: a peça é do cliente informado.
+${
+  withText
+    ? `ARTE COM TEXTO:
+- Escreva no prompt cada texto entre aspas duplas exatamente como deve aparecer, dizendo o papel (headline, apoio, selo/CTA) e a posição (ex.: "headline at top-left, bold sans-serif, white").
+- Hierarquia clara: no máximo 1 headline + 1 linha de apoio + 1 selo/CTA curto. Tipografia sem serifa, legível, coerente com a tipografia da marca; cores da paleta HEX.
+- Peça um texto nítido e sem erros: "render the Portuguese text exactly as written, correct accents, no extra words, no misspellings".
+- LOGO: não desenhe nenhum logo (o logo real é aplicado depois pelo sistema). Reserve uma área limpa para ele e diga onde (ex.: "keep a clean empty area at bottom-center for the logo").
+- Stories 9:16: textos e logo fora dos 14% de cima e 20% de baixo. Feed: margens seguras de ~6%.`
+    : `IMAGEM BASE:
+- SEM texto, letras, números, logos ou marca d'água. Reserve espaço negativo limpo para o texto que entra depois.
+- Stories 9:16: deixar ~15% do topo e ~20% da base livres. Feed: espaço limpo num lado ou no terço superior.`
+}
+${
+  isHealth
+    ? `- Publicidade em saúde (CFM/CFO): sem antes e depois, sem promessa de resultado, sem sangue ou procedimento invasivo, sem imagem chocante; ambientes clínicos realistas e EPI coerente.`
+    : ""
+}
+- Fotorrealista quando houver foto; mãos e anatomia naturais. Respeite a paleta e as regras do cliente.
 
-Varie as peças entre si (ângulo, cenário, assunto) para não ficarem repetidas.
+FORMATO DO PROMPT (em INGLÊS, exceto os textos da arte que ficam em português entre aspas), um parágrafo denso nesta ordem: papel de cada referência ("Use image 1 for layout and graphic shapes, image 2 for typography style..." — só se o modelo recebe imagens; se não recebe, descreva o estilo delas), cena/assunto, composição e câmera, luz, paleta HEX, ${withText ? "textos com posição e estilo, área do logo," : ""} mood (3 adjetivos), formato, restrições.
 
-Responda SOMENTE com JSON válido, sem markdown, no formato:
-{"pieces":[{"format":"feed"|"story","title":"título curto em português","summary_pt":"resumo da cena em 1 frase em português","prompt":"prompt em inglês","reference_ids":["ids das referências usadas nesta peça"]}]}`;
+Responda SOMENTE com JSON válido, sem markdown:
+{"pieces":[{"format":"feed"|"story","title":"título curto em português","summary_pt":"resumo da peça em 1 frase em português${withText ? ", citando os textos" : ""}","prompt":"prompt","reference_ids":["ids das referências usadas nesta peça"]}]}`;
+}
 
 export type DirectorInput = {
   client: Client;
@@ -31,7 +48,11 @@ export type DirectorInput = {
   feedCount: number;
   storyCount: number;
   modelSeesImages: boolean;
+  withText: boolean;
 };
+
+const isHealthClient = (c: Client) =>
+  /sa[uú]de|hospital|cl[ií]nic|m[eé]dic|odonto|dent|laborat|psic|fisio|nutri|est[eé]tic/i.test(`${c.segment || ""} ${c.brand_notes || ""}`);
 
 function userText(i: DirectorInput) {
   const refList = i.refs
@@ -39,18 +60,19 @@ function userText(i: DirectorInput) {
     .join("\n");
   return `Cliente: ${i.client.name}${i.client.segment ? ` (${i.client.segment})` : ""}
 Paleta da marca: ${i.client.palette?.length ? i.client.palette.join(", ") : "não definida"}
-Tipografia: ${i.client.fonts || "-"} (só contexto de estilo; as imagens continuam sem texto)
+Tipografia da marca: ${i.client.fonts || "-"}
 Sobre a marca: ${i.client.brand_notes || "-"}
 Nunca usar: ${i.client.rules || "-"}
 
 Briefing: ${i.brief}
 
-Peças: ${i.feedCount} de Feed (4:5) e ${i.storyCount} de Stories (9:16).
+Peças (se o briefing não listar as suas): ${i.feedCount} de Feed (4:5) e ${i.storyCount} de Stories (9:16).
+Modo: ${i.withText ? "ARTE FINAL COM TEXTO" : "IMAGEM BASE SEM TEXTO"}.
 Modelo de imagem ${i.modelSeesImages ? "RECEBE as referências como imagem; diga no prompt o papel de cada uma (image 1, image 2...)." : "NÃO recebe as referências (só texto); descreva o estilo delas no prompt."}
 
 Referências anexadas, na ordem:
 ${refList || "(nenhuma)"}${i.logoUrl ? `
-Depois das referências vem o LOGO da marca: use só para entender cores e personalidade visual. Nunca desenhe, cite ou reproduza o logo na imagem (ele é aplicado depois). Não inclua o logo em reference_ids.` : ""}${i.manualUrl ? `
+Depois das referências vem o LOGO da marca: use só para entender cores e personalidade visual. Nunca desenhe o logo na imagem: ele é aplicado depois pelo sistema. Não inclua o logo em reference_ids.` : ""}${i.manualUrl ? `
 O MANUAL DE MARCA do cliente está anexado (PDF). Siga as diretrizes de fotografia, cor e estilo dele quando houver.` : ""}`;
 }
 
@@ -87,7 +109,7 @@ async function viaAnthropic(i: DirectorInput) {
     body: JSON.stringify({
       model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
       max_tokens: 6000,
-      system: SYSTEM,
+      system: buildSystem(i.withText, isHealthClient(i.client)),
       messages: [{ role: "user", content }],
     }),
   });
@@ -110,7 +132,7 @@ async function viaOpenAI(i: DirectorInput) {
       model: process.env.OPENAI_MODEL,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: SYSTEM },
+        { role: "system", content: buildSystem(i.withText, isHealthClient(i.client)) },
         { role: "user", content },
       ],
     }),
