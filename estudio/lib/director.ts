@@ -18,7 +18,8 @@ ${
   withText
     ? `ARTE COM TEXTO:
 - Escreva no prompt cada texto entre aspas duplas exatamente como deve aparecer, dizendo o papel (headline, apoio, selo/CTA) e a posição (ex.: "headline at top-left, bold sans-serif, white").
-- Hierarquia clara: no máximo 1 headline + 1 linha de apoio + 1 selo/CTA curto. Tipografia sem serifa, legível, coerente com a tipografia da marca; cores da paleta HEX.
+- Hierarquia clara: no máximo 1 headline + 1 linha de apoio + 1 selo/CTA curto.
+- NÃO adicione setas, botões, ícones, selos, "swipe", números de página ou elementos gráficos que não estejam no briefing — mesmo que apareçam nas referências. Diga isso no prompt ("no arrows, no buttons, no icons"). Tipografia sem serifa, legível, coerente com a tipografia da marca; cores da paleta HEX.
 - Peça um texto nítido e sem erros: "render the Portuguese text exactly as written, correct accents, no extra words, no misspellings".
 - LOGO: não desenhe nenhum logo (o logo real é aplicado depois pelo sistema, na posição informada). Nessa posição deixe uma área de FUNDO LISO E ESCURO OU CLARO UNIFORME (cor sólida da paleta, sem foto, sem objeto, sem textura, sem texto), com ~30% da largura da arte, e diga isso no prompt (ex.: "keep the bottom-right corner (about 30% of the width) as an empty flat solid dark green area, no objects, no text — reserved for the logo"). Componha a foto e os textos para não invadirem essa área.
 - Stories 9:16: textos e logo fora dos 14% de cima e 20% de baixo. Feed: margens seguras de ~6%.`

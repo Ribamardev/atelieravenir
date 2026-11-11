@@ -1,9 +1,11 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { sb, signedUrls } from "@/lib/supabase-browser";
 import { autoPlace, downloadCropped, slug, LOGO_POS_LABEL, type FixedPos, type LogoPos } from "@/lib/download";
 import { useJobPolling, statusClass, statusLabel } from "./jobs";
 import type { Format } from "@/lib/types";
+
+type Area = { x: number; y: number; w: number; h: number }; // % da imagem
 
 type Row = {
   id: string;
@@ -76,7 +78,9 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
   async function redo(r: Row, extra: string, override?: Record<string, unknown>) {
     if (!r.sm_jobs) return;
     setError(null);
-    const prompt = extra.trim() ? `${r.sm_jobs.prompt} Adjustments: ${extra.trim()}` : r.sm_jobs.prompt;
+    const prompt = extra.trim()
+      ? `${r.sm_jobs.prompt} MANDATORY CHANGES (these override anything above): ${extra.trim()}`
+      : r.sm_jobs.prompt;
     const res = await fetch("/api/generate", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -91,6 +95,19 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
     const body = await res.json();
     if (!res.ok) return setError(body.error);
     track(body.jobs);
+    setOpen(null);
+  }
+
+  async function edit(r: Row, instruction: string, area: Area | null) {
+    setError(null);
+    const res = await fetch("/api/edit", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ imageId: r.id, instruction, area }),
+    });
+    const body = await res.json();
+    if (!res.ok) return setError(body.error);
+    track([body.job]);
     setOpen(null);
   }
 
@@ -210,6 +227,7 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
           onReview={setReview}
           onRedo={redo}
           onRemove={remove}
+          onEdit={edit}
         />
       )}
     </div>
@@ -225,6 +243,7 @@ function Detail({
   onReview,
   onRedo,
   onRemove,
+  onEdit,
 }: {
   row: Row;
   url?: string;
@@ -234,8 +253,19 @@ function Detail({
   onReview: (r: Row, review: Row["review"], feedback?: string) => void;
   onRedo: (r: Row, extra: string, override?: Record<string, unknown>) => Promise<void>;
   onRemove: (r: Row) => void;
+  onEdit: (r: Row, instruction: string, area: Area | null) => Promise<void>;
 }) {
   const [fb, setFb] = useState(row.feedback || "");
+  const [marking, setMarking] = useState(false);
+  const [area, setArea] = useState<Area | null>(null);
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
+  function pct(e: React.PointerEvent<HTMLDivElement>) {
+    const r = e.currentTarget.getBoundingClientRect();
+    return {
+      x: Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100)),
+      y: Math.min(100, Math.max(0, ((e.clientY - r.top) / r.height) * 100)),
+    };
+  }
   const [busy, setBusy] = useState(false);
   const hasLogo = logos.length > 0;
   const [pos, setPos] = useState<LogoPos>(hasLogo ? "auto" : "none");
@@ -287,7 +317,45 @@ function Detail({
     >
       <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980, width: "100%", maxHeight: "92vh", overflow: "auto" }}>
         <div className="grid g2" style={{ alignItems: "start" }}>
-          <div className={`thumb ${fmt === "story" ? "story" : ""}`}>
+          <div
+            className={`thumb ${fmt === "story" ? "story" : ""}`}
+            style={{ cursor: marking ? "crosshair" : "default", touchAction: marking ? "none" : "auto", userSelect: "none" }}
+            onDragStart={(e) => e.preventDefault()}
+            onPointerDown={(e) => {
+              if (!marking) return;
+              e.currentTarget.setPointerCapture(e.pointerId);
+              const p = pct(e);
+              dragStart.current = p;
+              setArea({ x: p.x, y: p.y, w: 0, h: 0 });
+            }}
+            onPointerMove={(e) => {
+              if (!marking || !dragStart.current) return;
+              const p = pct(e);
+              const s0 = dragStart.current;
+              setArea({ x: Math.min(s0.x, p.x), y: Math.min(s0.y, p.y), w: Math.abs(p.x - s0.x), h: Math.abs(p.y - s0.y) });
+            }}
+            onPointerUp={() => {
+              if (!marking) return;
+              dragStart.current = null;
+              setMarking(false);
+              setArea((a) => (a && a.w > 1 && a.h > 1 ? a : null));
+            }}
+          >
+            {area && (
+              <div
+                style={{
+                  position: "absolute",
+                  left: `${area.x}%`,
+                  top: `${area.y}%`,
+                  width: `${area.w}%`,
+                  height: `${area.h}%`,
+                  border: "2px dashed #ff4d4f",
+                  background: "rgba(255,77,79,.15)",
+                  zIndex: 3,
+                  pointerEvents: "none",
+                }}
+              />
+            )}
             {url && <img src={url} alt="" />}
             {logo && (
               <img
@@ -361,19 +429,47 @@ function Detail({
               </div>
             </div>
             <div>
-              <label>Ajuste para refazer (opcional)</label>
-              <textarea value={fb} onChange={(e) => setFb(e.target.value)} placeholder="Ex.: luz mais quente, médica mais jovem, fundo menos poluído" />
+              <label>O que mudar nesta peça</label>
+              <textarea
+                value={fb}
+                onChange={(e) => setFb(e.target.value)}
+                placeholder="Ex.: remover a seta branca com fundo laranja. Ou: trocar o texto por “Em breve”."
+              />
+              <div className="row" style={{ marginTop: 6 }}>
+                <button className={marking ? "small" : "ghost small"} onClick={() => { setMarking((m) => !m); }}>
+                  {marking ? "Arraste sobre a imagem…" : area ? "✎ Marcar outra área" : "✎ Marcar área na imagem"}
+                </button>
+                {area && (
+                  <button className="ghost small" onClick={() => setArea(null)}>Limpar área</button>
+                )}
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                  {area ? "Área marcada: a mudança fica só ali." : "Opcional: aponte onde está o que deve mudar."}
+                </span>
+              </div>
             </div>
             <div className="row">
               <button
+                disabled={busy || !fb.trim()}
+                title="Mantém a arte e muda só o que você pediu"
+                onClick={async () => {
+                  setBusy(true);
+                  await onEdit(row, fb, area);
+                  setBusy(false);
+                }}
+              >
+                {busy ? "Enviando…" : "✎ Editar só isso"}
+              </button>
+              <button
+                className="ghost"
                 disabled={busy}
+                title="Gera a peça de novo do zero, com o ajuste como regra obrigatória"
                 onClick={async () => {
                   setBusy(true);
                   await onRedo(row, fb);
                   setBusy(false);
                 }}
               >
-                {busy ? "Enviando…" : "↻ Refazer com ajuste"}
+                ↻ Gerar de novo
               </button>
               <button
                 className="ghost"
