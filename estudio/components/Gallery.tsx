@@ -102,7 +102,37 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
     load();
   }
 
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  // Download rápido: formato da peça, logo automático (lugar mais limpo + versão de maior contraste)
+  async function quickDownload(r: Row) {
+    const url = urls[r.storage_path];
+    if (!url) return;
+    const fmt = (r.sm_jobs?.format || "feed") as "feed" | "story";
+    let logo;
+    if (logos.length) {
+      const best = await autoPlace(url, fmt, logos.map((l) => l.url), 18);
+      logo = { url: best.logoUrl, pos: best.pos, widthPct: 18 };
+    }
+    const name = `${slug(clientName)}-${slug(r.sm_jobs?.title || "peca")}-${r.id.slice(0, 6)}-${fmt}`;
+    await downloadCropped(url, fmt, name, logo);
+  }
+
+  async function downloadMany(list: Row[]) {
+    for (const r of list) {
+      setDownloading(r.id);
+      try {
+        await quickDownload(r);
+      } catch (e: any) {
+        setError(`Não foi possível baixar "${r.sm_jobs?.title}": ${e.message || e}`);
+      }
+      await new Promise((res) => setTimeout(res, 600)); // o navegador aceita downloads em sequência
+    }
+    setDownloading(null);
+  }
+
   const shown = rows.filter((r) => filter === "all" || r.review === filter);
+  const approved = rows.filter((r) => r.review === "approved");
   const running = jobs.filter((j) => !["completed", "failed", "nsfw", "canceled"].includes(j.status));
 
   return (
@@ -116,7 +146,12 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
             </button>
           ))}
         </div>
-        {running.length > 0 && <span className="pill warn">{running.length} em andamento…</span>}
+        <div className="row">
+          {running.length > 0 && <span className="pill warn">{running.length} em andamento…</span>}
+          <button className="small" disabled={!approved.length || !!downloading} onClick={() => downloadMany(approved)}>
+            {downloading ? "Baixando…" : `↓ Baixar aprovadas (${approved.length})`}
+          </button>
+        </div>
       </div>
 
       {shown.length === 0 ? (
@@ -127,6 +162,18 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
             <div key={r.id} className={`thumb ${r.sm_jobs?.format === "story" ? "story" : ""}`} onClick={() => setOpen(r)} style={{ cursor: "pointer" }}>
               {urls[r.storage_path] && <img src={urls[r.storage_path]} alt={r.sm_jobs?.title || ""} />}
               <span className="tag">{r.sm_jobs?.format === "story" ? "Stories" : "Feed"}</span>
+              <button
+                className="small"
+                title="Baixar no tamanho do Instagram, com o logo"
+                disabled={!!downloading}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  downloadMany([r]);
+                }}
+                style={{ position: "absolute", top: 8, right: 8, padding: "5px 9px", fontSize: 12 }}
+              >
+                {downloading === r.id ? "…" : "↓ Baixar"}
+              </button>
               <div className="meta">
                 <div className="row between">
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }}>
