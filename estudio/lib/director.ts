@@ -33,17 +33,28 @@ ${
     ? `- Publicidade em saúde (CFM/CFO): sem antes e depois, sem promessa de resultado, sem sangue ou procedimento invasivo, sem imagem chocante; ambientes clínicos realistas e EPI coerente.`
     : ""
 }
-- Fotorrealista quando houver foto; mãos e anatomia naturais. Respeite a paleta e as regras do cliente.
+FOTOGRAFIA REALISTA (sempre que houver pessoas ou ambientes):
+- O objetivo é parecer FOTO REAL de fotógrafo, não imagem de IA. Direção de fotografia documental/editorial: momento espontâneo e verdadeiro, não posado.
+- Poucas pessoas em foco: no máximo 1 ou 2 protagonistas nítidos; se houver mais gente, fora de foco no fundo. Nunca cenas lotadas com vários rostos nítidos.
+- Pessoas comuns brasileiras, com idades, tipos físicos e tons de pele variados e naturais; roupas do dia a dia da profissão. Nada de modelos perfeitos, músculos exagerados ou sorrisos de banco de imagem.
+- Câmera e luz reais: "shot on a full-frame camera, 35mm or 50mm lens at f/2, natural window light or practical lights, slight natural grain, true-to-life colors, realistic white balance".
+- Textura real: "visible skin pores and fine lines, natural skin tones, subtle imperfections, real hair strands, natural hand poses with correct fingers, real fabric wrinkles".
+- Sempre inclua no fim do prompt: "Avoid AI look: no plastic or waxy skin, no airbrushed faces, no HDR, no over-sharpening, no glossy CGI, no oversaturated teal-orange grading, no symmetrical faces, no duplicated people, no extra fingers".
+- FOTO REAL DO CLIENTE: se uma imagem for marcada como FOTO REAL e estiver nos reference_ids da peça, ela É a fotografia da arte. Diga no prompt: "Use image N as the photograph exactly as provided — do not redraw, retouch or replace the people or the scene; only crop/mask it into the layout". Use cada foto real em no máximo uma peça, a não ser que haja mais peças que fotos.
+- Respeite a paleta e as regras do cliente.
+
+NUMERAÇÃO DAS IMAGENS: o modelo recebe, para cada peça, SÓ as imagens dos reference_ids daquela peça, na ordem em que você as listar. Então no prompt "image 1" = primeiro id da lista daquela peça, "image 2" = segundo, etc. Se houver foto real, coloque-a PRIMEIRO na lista.
 
 FORMATO DO PROMPT (em INGLÊS, exceto os textos da arte que ficam em português entre aspas), um parágrafo denso nesta ordem: papel de cada referência ("Use image 1 for layout and graphic shapes, image 2 for typography style..." — só se o modelo recebe imagens; se não recebe, descreva o estilo delas), cena/assunto, composição e câmera, luz, paleta HEX, ${withText ? "textos com posição e estilo, área do logo," : ""} mood (3 adjetivos), formato, restrições.
 
 Responda SOMENTE com JSON válido, sem markdown:
-{"pieces":[{"format":"feed"|"story","title":"título curto em português","summary_pt":"resumo da peça em 1 frase em português${withText ? ", citando os textos" : ""}","prompt":"prompt","reference_ids":["ids das referências usadas nesta peça"]}]}`;
+{"pieces":[{"format":"feed"|"story","title":"título curto em português","summary_pt":"resumo da peça em 1 frase em português${withText ? ", citando os textos" : ""}","prompt":"prompt","reference_ids":["ids das imagens usadas nesta peça, foto real primeiro"]}]}`;
 }
 
 export type DirectorInput = {
   client: Client;
   refs: { id: string; url: string; notes: string | null }[];
+  photos?: { id: string; url: string; name: string | null }[];
   brief: string;
   logoUrl?: string | null;
   manualUrl?: string | null;
@@ -74,8 +85,10 @@ Modo: ${i.withText ? "ARTE FINAL COM TEXTO" : "IMAGEM BASE SEM TEXTO"}.
 Posição do logo (reservar área lisa): ${!i.logoArea || i.logoArea === "none" ? "sem logo" : i.logoArea}.
 Modelo de imagem ${i.modelSeesImages ? "RECEBE as referências como imagem; diga no prompt o papel de cada uma (image 1, image 2...)." : "NÃO recebe as referências (só texto); descreva o estilo delas no prompt."}
 
-Referências anexadas, na ordem:
-${refList || "(nenhuma)"}${i.logoUrl ? `
+Referências de estilo anexadas, na ordem:
+${refList || "(nenhuma)"}${i.photos?.length ? `
+Depois delas vêm as FOTOS REAIS do cliente (usar como a fotografia da arte, sem redesenhar):
+${i.photos.map((p, n) => `Foto real ${n + 1} → id ${p.id}${p.name ? ` (${p.name})` : ""}`).join("\n")}` : ""}${i.logoUrl ? `
 Depois das referências vem o LOGO da marca: use só para entender cores e personalidade visual. Nunca desenhe o logo na imagem: ele é aplicado depois pelo sistema. Não inclua o logo em reference_ids.` : ""}${i.manualUrl ? `
 O MANUAL DE MARCA do cliente está anexado (PDF). Siga as diretrizes de fotografia, cor e estilo dele quando houver.` : ""}`;
 }
@@ -101,6 +114,7 @@ async function viaAnthropic(i: DirectorInput) {
   const content: any[] = [];
   if (i.manualUrl) content.push({ type: "document", source: { type: "url", url: i.manualUrl }, title: "Manual de marca" });
   i.refs.forEach((r) => content.push({ type: "image", source: { type: "url", url: r.url } }));
+  (i.photos || []).forEach((p) => content.push({ type: "image", source: { type: "url", url: p.url } }));
   if (i.logoUrl) content.push({ type: "image", source: { type: "url", url: i.logoUrl } });
   content.push({ type: "text", text: userText(i) });
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -126,7 +140,7 @@ async function viaAnthropic(i: DirectorInput) {
 async function viaOpenAI(i: DirectorInput) {
   if (!process.env.OPENAI_MODEL) throw new Error("Defina OPENAI_MODEL (ex.: o modelo que você usa no Atelier).");
   // OpenAI: manual em PDF não vai por URL; segue logo + referências
-  const content: any[] = i.refs.map((r) => ({ type: "image_url", image_url: { url: r.url } }));
+  const content: any[] = [...i.refs, ...(i.photos || [])].map((r) => ({ type: "image_url", image_url: { url: r.url } }));
   if (i.logoUrl && !/\.svg(\?|$)/i.test(i.logoUrl)) content.push({ type: "image_url", image_url: { url: i.logoUrl } });
   content.push({ type: "text", text: userText({ ...i, manualUrl: null }) });
   const res = await fetch("https://api.openai.com/v1/chat/completions", {

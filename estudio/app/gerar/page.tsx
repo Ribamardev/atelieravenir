@@ -22,6 +22,8 @@ function Generate() {
   const [modelId, setModelId] = useState("");
   const [refs, setRefs] = useState<Reference[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<{ id: string; name: string | null; url?: string }[]>([]);
+  const [photoSel, setPhotoSel] = useState<string[]>([]);
   const [brief, setBrief] = useState("");
   const [feedCount, setFeedCount] = useState(2);
   const [storyCount, setStoryCount] = useState(2);
@@ -66,7 +68,20 @@ function Generate() {
   useEffect(() => {
     setSelected([]);
     setRefs([]);
+    setPhotos([]);
+    setPhotoSel([]);
     if (!clientId) return;
+    sb()
+      .from("sm_brand_assets")
+      .select("id, name, storage_path")
+      .eq("client_id", clientId)
+      .eq("kind", "other")
+      .order("created_at", { ascending: false })
+      .then(async ({ data }) => {
+        const list = data || [];
+        const urls = await signedUrls(list.map((r) => r.storage_path));
+        setPhotos(list.map((r) => ({ id: r.id, name: r.name, url: urls[r.storage_path] })));
+      });
     sb()
       .from("sm_references")
       .select("*")
@@ -80,7 +95,10 @@ function Generate() {
   }, [clientId]);
 
   const model = models.find((m) => m.id === modelId);
-  const refById = useMemo(() => Object.fromEntries(refs.map((r) => [r.id, r])), [refs]);
+  const refById = useMemo(
+    () => Object.fromEntries([...refs.map((r) => [r.id, r]), ...photos.map((p) => [p.id, p])]),
+    [refs, photos]
+  ) as Record<string, { url?: string }>;
   const total = (pieces?.length || 0) * variations;
 
   async function plan() {
@@ -91,7 +109,7 @@ function Generate() {
     const res = await fetch("/api/plan", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ clientId, referenceIds: selected, brief, feedCount, storyCount, modelId, withText, logoArea }),
+      body: JSON.stringify({ clientId, referenceIds: selected, brief, feedCount, storyCount, modelId, withText, logoArea, photoIds: photoSel }),
     });
     const body = await res.json();
     setBusy("");
@@ -233,6 +251,36 @@ function Generate() {
             </div>
           )}
         </div>
+        {photos.length > 0 && (
+          <div>
+            <label>
+              Fotos reais para usar na arte {photoSel.length ? `(${photoSel.length} selecionadas)` : "(opcional — deixa as pessoas 100% reais)"}
+            </label>
+            <div className="grid g4">
+              {photos.map((p) => {
+                const on = photoSel.includes(p.id);
+                return (
+                  <div
+                    key={p.id}
+                    className={`thumb ${on ? "sel" : ""}`}
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setPhotoSel((s) => (on ? s.filter((x) => x !== p.id) : [...s, p.id]))}
+                  >
+                    {p.url && <img src={p.url} alt="" />}
+                    {on && <span className="check">✓</span>}
+                    <span className="tag">Foto real</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {clientId && photos.length === 0 && (
+          <div className="note">
+            Dica: para pessoas 100% reais, suba fotos de verdade em{" "}
+            <Link href={`/clientes/${clientId}`} style={{ color: "var(--accent)" }}>Identidade visual → Fotos reais</Link>.
+          </div>
+        )}
         <div>
           <button disabled={!canPlan} onClick={plan}>
             {busy === "plan" ? "O diretor de arte está analisando…" : "Planejar peças"}

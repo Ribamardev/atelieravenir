@@ -63,7 +63,8 @@ export async function POST(req: Request) {
         ? [
             "Re-render this exact design at maximum quality.",
             "Keep the same layout, the same texts letter by letter (Portuguese, correct accents), the same colors, graphic shapes and composition.",
-            "Make the photo sharper and truly photorealistic: real camera lens detail, natural skin texture, realistic faces, hands and hair, correct anatomy, no AI artifacts, no plastic or waxy look, no warped faces.",
+            "Make the photo look like a real photograph taken by a professional photographer: full-frame camera, natural light, visible skin pores and fine lines, natural skin tones, real hair strands, natural hand poses with correct fingers, real fabric wrinkles, subtle natural grain.",
+            "Avoid AI look: no plastic or waxy skin, no airbrushed faces, no HDR, no over-sharpening, no glossy CGI, no oversaturated grading, no symmetrical or duplicated faces.",
             extraAsk,
             "Do not add any new elements, icons, arrows, buttons, logos or text.",
           ]

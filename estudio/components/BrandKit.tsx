@@ -35,6 +35,7 @@ export default function BrandKit({ client, onSaved }: { client: Client; onSaved:
   const logos = assets.filter((a) => a.kind === "logo");
   const manuals = assets.filter((a) => a.kind === "manual");
   const fonts = assets.filter((a) => a.kind === "font");
+  const photos = assets.filter((a) => a.kind === "other");
 
   async function upload(kind: BrandAsset["kind"], files: FileList | null) {
     if (!files?.length) return;
@@ -183,6 +184,37 @@ export default function BrandKit({ client, onSaved }: { client: Client; onSaved:
                     <button className="ghost small" onClick={() => makePrimary(a)}>Tornar principal</button>
                   )}
                   <button className="ghost small" disabled={busy === "extract"} onClick={() => extract(a)}>Extrair cores</button>
+                  <button className="danger small" onClick={() => remove(a)}>✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Fotos reais */}
+      <div className="card stack">
+        <div className="row between">
+          <div>
+            <h2 style={{ margin: 0 }}>Fotos reais</h2>
+            <div style={{ color: "var(--muted)", fontSize: 13 }}>
+              Fotos de verdade do cliente (equipe, espaço, clientes) ou de banco de imagens. Na geração, a IA monta a arte em volta
+              delas sem redesenhar as pessoas — é o jeito mais realista.
+            </div>
+          </div>
+          <UploadBtn kind="other" accept="image/png,image/jpeg,image/webp" label="+ Subir fotos" />
+        </div>
+        {photos.length === 0 ? (
+          <div className="empty" style={{ padding: 18 }}>Nenhuma foto real ainda.</div>
+        ) : (
+          <div className="grid g4">
+            {photos.map((a) => (
+              <div key={a.id} className="thumb">
+                {a.url && <img src={a.url} alt={a.name || ""} />}
+                <div className="meta row between">
+                  <span style={{ fontSize: 12, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }}>
+                    {a.name}
+                  </span>
                   <button className="danger small" onClick={() => remove(a)}>✕</button>
                 </div>
               </div>

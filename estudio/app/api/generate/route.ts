@@ -37,7 +37,9 @@ export async function POST(req: Request) {
     const hfUrlByRef = new Map<string, string>();
     async function hfUrl(refId: string) {
       if (hfUrlByRef.has(refId)) return hfUrlByRef.get(refId)!;
-      const { data: ref } = await supabase!.from("sm_references").select("*").eq("id", refId).single();
+      // Referência de estilo ou foto real do cliente (kit de marca)
+      let { data: ref } = await supabase!.from("sm_references").select("storage_path").eq("id", refId).maybeSingle();
+      if (!ref) ({ data: ref } = await supabase!.from("sm_brand_assets").select("storage_path").eq("id", refId).maybeSingle());
       if (!ref) return null;
       const { data: file, error } = await supabase!.storage.from(BUCKET).download(ref.storage_path);
       if (error || !file) return null;

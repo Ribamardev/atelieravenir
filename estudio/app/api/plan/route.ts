@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   if (!supabase) return NextResponse.json({ error: "Faça login." }, { status: 401 });
 
   try {
-    const { clientId, referenceIds = [], brief, feedCount = 0, storyCount = 0, modelId, withText = true, logoArea = "bottom-right" } = await req.json();
+    const { clientId, referenceIds = [], brief, feedCount = 0, storyCount = 0, modelId, withText = true, logoArea = "bottom-right", photoIds = [] } = await req.json();
     if (!clientId || !brief) throw new Error("Escolha o cliente e escreva o briefing.");
     if (feedCount + storyCount < 1 && !/\n\s*\d+[.)]/.test("\n" + brief)) throw new Error("Peça pelo menos uma imagem.");
     if (feedCount + storyCount > 12) throw new Error("Máximo de 12 peças por vez.");
@@ -45,7 +45,18 @@ export async function POST(req: Request) {
     const sign = async (p?: string) =>
       p ? (await supabase.storage.from(BUCKET).createSignedUrl(p, 900)).data?.signedUrl ?? null : null;
 
+    // Fotos reais do cliente (kit de marca, tipo "other")
+    const { data: photoRows } = photoIds.length
+      ? await supabase.from("sm_brand_assets").select("id, name, storage_path").in("id", photoIds)
+      : { data: [] as any[] };
+    const photos = [];
+    for (const ph of photoRows || []) {
+      const u = await sign(ph.storage_path);
+      if (u) photos.push({ id: ph.id, url: u, name: ph.name });
+    }
+
     const pieces = await planPieces({
+      photos,
       logoUrl: await sign(logo?.storage_path),
       manualUrl: await sign(manual?.storage_path),
       client,
