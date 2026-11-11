@@ -78,6 +78,11 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
   async function redo(r: Row, extra: string, override?: Record<string, unknown>) {
     if (!r.sm_jobs) return;
     setError(null);
+    // Peça que já veio de uma edição: o prompt dela é uma instrução de edição e não serve para gerar do zero.
+    // Nesses casos refazemos a partir da própria imagem.
+    if (/^(Edit the provided image|Re-render this exact design)/.test(r.sm_jobs.prompt)) {
+      return edit(r, extra.trim() || "Generate a new variation of this same design", null, override ? "enhance" : "edit");
+    }
     const prompt = extra.trim()
       ? `${r.sm_jobs.prompt} MANDATORY CHANGES (these override anything above): ${extra.trim()}`
       : r.sm_jobs.prompt;
