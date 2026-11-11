@@ -22,8 +22,13 @@ export async function POST(req: Request) {
   if (!supabase) return NextResponse.json({ error: "Faça login." }, { status: 401 });
 
   try {
-    const { imageId, instruction, area } = (await req.json()) as { imageId: string; instruction: string; area?: Area | null };
-    if (!instruction?.trim()) throw new Error("Escreva o que deve mudar na imagem.");
+    const { imageId, instruction = "", area, mode = "edit" } = (await req.json()) as {
+      imageId: string;
+      instruction?: string;
+      area?: Area | null;
+      mode?: "edit" | "enhance";
+    };
+    if (mode === "edit" && !instruction.trim()) throw new Error("Escreva o que deve mudar na imagem.");
 
     const { data: img } = await supabase.from("sm_images").select("*, sm_jobs(*)").eq("id", imageId).single();
     if (!img) throw new Error("Imagem não encontrada.");
@@ -42,21 +47,42 @@ export async function POST(req: Request) {
       model = alt?.[0];
     }
     if (!model) throw new Error("Ative um modelo que aceite imagens (ex.: Marketing Studio Image) em Configurações.");
-    const m = model as Model;
+    const m = { ...(model as Model) };
+    // Pedido de qualidade/realismo (ou versão final) roda em qualidade alta, se o modelo tiver esse ajuste
+    const wantsQuality =
+      mode === "enhance" || /alta|resolu|qualidade|n[ií]tid|defini|realis|\bia\b|artificial|fake|pl[aá]stic|borrad/i.test(instruction);
+    if (wantsQuality && m.extra && "quality" in m.extra) m.extra = { ...m.extra, quality: "high" };
 
     const { data: file, error: de } = await supabase.storage.from(BUCKET).download(img.storage_path);
     if (de || !file) throw new Error("Não foi possível ler a imagem original.");
     const imageUrl = await uploadToHiggsfield(await file.arrayBuffer(), file.type || "image/png");
 
-    const prompt = [
-      "Edit the provided image. Apply ONLY this change:",
-      `"${instruction.trim()}".`,
-      area ? `The change applies only to the ${describeArea(area)}; fill that area seamlessly with the surrounding background.` : "",
-      "Keep everything else EXACTLY the same: same photo, composition, colors, typography, all texts letter by letter, layout and proportions.",
-      "Do not add any new elements, icons, arrows, buttons, logos or text.",
-    ]
-      .filter(Boolean)
-      .join(" ");
+    const extraAsk = instruction.trim() ? `Also apply this request: "${instruction.trim()}".` : "";
+    const prompt =
+      mode === "enhance"
+        ? [
+            "Re-render this exact design at maximum quality.",
+            "Keep the same layout, the same texts letter by letter (Portuguese, correct accents), the same colors, graphic shapes and composition.",
+            "Make the photo sharper and truly photorealistic: real camera lens detail, natural skin texture, realistic faces, hands and hair, correct anatomy, no AI artifacts, no plastic or waxy look, no warped faces.",
+            extraAsk,
+            "Do not add any new elements, icons, arrows, buttons, logos or text.",
+          ]
+            .filter(Boolean)
+            .join(" ")
+        : [
+            "Edit the provided image. Apply this change:",
+            `"${instruction.trim()}".`,
+            area
+              ? `The change applies only to the ${describeArea(area)}; blend it seamlessly with its surroundings and keep everything outside that area unchanged.`
+              : "Change whatever is needed to fulfil the request (including re-rendering the photo if the request is about it).",
+            wantsQuality
+              ? "Render in high definition and truly photorealistic: real camera lens detail, natural skin, realistic faces and hands, no AI artifacts, no plastic look."
+              : "",
+            "Keep the layout, all texts letter by letter, colors and graphic shapes the same unless the request says otherwise.",
+            "Do not add any new elements, icons, arrows, buttons, logos or text.",
+          ]
+            .filter(Boolean)
+            .join(" ");
 
     const { data: newJob, error: je } = await supabase
       .from("sm_jobs")
@@ -64,8 +90,8 @@ export async function POST(req: Request) {
         client_id: img.client_id,
         model_id: m.id,
         format: job.format,
-        title: `${(job.title || "Peça").replace(/ \((refeita|editada|final em alta)\)$/, "")} (editada)`,
-        summary_pt: `Edição: ${instruction.trim()}`,
+        title: `${(job.title || "Peça").replace(/ \((refeita|editada|final em alta)\)$/, "")} (${mode === "enhance" ? "final em alta" : "editada"})`,
+        summary_pt: mode === "enhance" ? `Versão final em alta${instruction.trim() ? `: ${instruction.trim()}` : ""}` : `Edição: ${instruction.trim()}`,
         prompt,
         reference_ids: [],
         aspect_ratio: job.aspect_ratio,

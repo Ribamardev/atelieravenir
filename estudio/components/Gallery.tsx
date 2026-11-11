@@ -98,12 +98,12 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
     setOpen(null);
   }
 
-  async function edit(r: Row, instruction: string, area: Area | null) {
+  async function edit(r: Row, instruction: string, area: Area | null, mode: "edit" | "enhance" = "edit") {
     setError(null);
     const res = await fetch("/api/edit", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ imageId: r.id, instruction, area }),
+      body: JSON.stringify({ imageId: r.id, instruction, area, mode }),
     });
     const body = await res.json();
     if (!res.ok) return setError(body.error);
@@ -253,7 +253,7 @@ function Detail({
   onReview: (r: Row, review: Row["review"], feedback?: string) => void;
   onRedo: (r: Row, extra: string, override?: Record<string, unknown>) => Promise<void>;
   onRemove: (r: Row) => void;
-  onEdit: (r: Row, instruction: string, area: Area | null) => Promise<void>;
+  onEdit: (r: Row, instruction: string, area: Area | null, mode?: "edit" | "enhance") => Promise<void>;
 }) {
   const [fb, setFb] = useState(row.feedback || "");
   const [marking, setMarking] = useState(false);
@@ -474,10 +474,10 @@ function Detail({
               <button
                 className="ghost"
                 disabled={busy}
-                title="Refaz esta peça com o mesmo prompt em qualidade alta (custa mais). Use só na aprovada."
+                title="Refaz ESTA MESMA arte em qualidade alta, com foto mais nítida e realista (custa mais). Use na aprovada."
                 onClick={async () => {
                   setBusy(true);
-                  await onRedo(row, fb, { quality: "high" });
+                  await onEdit(row, fb, null, "enhance");
                   setBusy(false);
                 }}
               >
