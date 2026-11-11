@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { sb, signedUrls } from "@/lib/supabase-browser";
-import { downloadCropped, slug, LOGO_POS_LABEL, type LogoPos } from "@/lib/download";
+import { autoPlace, downloadCropped, slug, LOGO_POS_LABEL, type FixedPos, type LogoPos } from "@/lib/download";
 import { useJobPolling, statusClass, statusLabel } from "./jobs";
 import type { Format } from "@/lib/types";
 
@@ -21,21 +21,20 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
   const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
   const [open, setOpen] = useState<Row | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logos, setLogos] = useState<{ url: string; name: string }[]>([]);
 
   useEffect(() => {
+    // Todas as versões do logo (principal primeiro): o modo automático escolhe a que mais se destaca
     sb()
       .from("sm_brand_assets")
-      .select("storage_path, is_primary, mime")
+      .select("storage_path, is_primary, name")
       .eq("client_id", clientId)
       .eq("kind", "logo")
       .order("is_primary", { ascending: false })
-      .limit(1)
       .then(async ({ data }) => {
-        const p = data?.[0]?.storage_path;
-        if (!p) return setLogoUrl(null);
-        const u = await signedUrls([p]);
-        setLogoUrl(u[p] || null);
+        const list = data || [];
+        const u = await signedUrls(list.map((d) => d.storage_path));
+        setLogos(list.filter((d) => u[d.storage_path]).map((d) => ({ url: u[d.storage_path], name: d.name || "logo" })));
       });
   }, [clientId]);
 
@@ -158,7 +157,7 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
         <Detail
           row={open}
           url={urls[open.storage_path]}
-          logoUrl={logoUrl}
+          logos={logos}
           clientName={clientName}
           onClose={() => setOpen(null)}
           onReview={setReview}
@@ -173,7 +172,7 @@ export default function Gallery({ clientId, clientName }: { clientId: string; cl
 function Detail({
   row,
   url,
-  logoUrl,
+  logos,
   clientName,
   onClose,
   onReview,
@@ -182,7 +181,7 @@ function Detail({
 }: {
   row: Row;
   url?: string;
-  logoUrl: string | null;
+  logos: { url: string; name: string }[];
   clientName: string;
   onClose: () => void;
   onReview: (r: Row, review: Row["review"], feedback?: string) => void;
@@ -191,15 +190,41 @@ function Detail({
 }) {
   const [fb, setFb] = useState(row.feedback || "");
   const [busy, setBusy] = useState(false);
-  const [pos, setPos] = useState<LogoPos>(logoUrl ? "bottom-right" : "none");
-  const [logoSize, setLogoSize] = useState(22);
+  const hasLogo = logos.length > 0;
+  const [pos, setPos] = useState<LogoPos>(hasLogo ? "auto" : "none");
+  const [logoPick, setLogoPick] = useState<string>("auto"); // "auto" ou a URL de uma versão
+  const [logoSize, setLogoSize] = useState(18);
   const [dl, setDl] = useState(false);
-  const logo = logoUrl && pos !== "none" ? { url: logoUrl, pos, widthPct: logoSize } : undefined;
+  const [resolved, setResolved] = useState<{ pos: FixedPos; logoUrl: string } | null>(null);
+  const fmtJob = (row.sm_jobs?.format || "feed") as "feed" | "story";
+
+  // Resolve posição/versão para um formato (automático analisa a imagem)
+  async function resolve(format: "feed" | "story") {
+    if (!url || !hasLogo || pos === "none") return null;
+    const candidates = logoPick === "auto" ? logos.map((l) => l.url) : [logoPick];
+    if (pos === "auto") return autoPlace(url, format, candidates, logoSize);
+    if (candidates.length === 1) return { pos: pos as FixedPos, logoUrl: candidates[0] };
+    const best = await autoPlace(url, format, candidates, logoSize); // escolhe só a versão
+    return { pos: pos as FixedPos, logoUrl: best.logoUrl };
+  }
+
+  useEffect(() => {
+    let alive = true;
+    resolve(fmtJob).then((r) => alive && setResolved(r)).catch(() => alive && setResolved(null));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, pos, logoPick, logoSize, logos.length]);
+
+  const logo = resolved ? { url: resolved.logoUrl, pos: resolved.pos, widthPct: logoSize } : undefined;
   async function download(format: "feed" | "story") {
     if (!url) return;
     setDl(true);
     try {
-      await downloadCropped(url, format, `${name}-${format}${logo ? "-logo" : ""}`, logo);
+      const r = format === fmtJob ? resolved : await resolve(format);
+      const l = r ? { url: r.logoUrl, pos: r.pos, widthPct: logoSize } : undefined;
+      await downloadCropped(url, format, `${name}-${format}${l ? "-logo" : ""}`, l);
     } catch (e: any) {
       alert("Não foi possível baixar: " + (e.message || e));
     }
@@ -227,10 +252,10 @@ function Detail({
                   height: "auto",
                   aspectRatio: "auto",
                   objectFit: "contain",
-                  left: pos.endsWith("left") ? "6%" : pos.endsWith("center") ? `${(100 - logo.widthPct) / 2}%` : undefined,
-                  right: pos.endsWith("right") ? "6%" : undefined,
-                  top: pos.startsWith("top") ? (fmt === "story" ? "14%" : "4.8%") : undefined,
-                  bottom: pos.startsWith("bottom") ? (fmt === "story" ? "20%" : "4.8%") : undefined,
+                  left: logo.pos.endsWith("left") ? "6%" : logo.pos.endsWith("center") ? `${(100 - logo.widthPct) / 2}%` : undefined,
+                  right: logo.pos.endsWith("right") ? "6%" : undefined,
+                  top: logo.pos.startsWith("top") ? (fmt === "story" ? "14%" : "4.8%") : undefined,
+                  bottom: logo.pos.startsWith("bottom") ? (fmt === "story" ? "20%" : "4.8%") : undefined,
                 }}
               />
             )}
@@ -247,13 +272,21 @@ function Detail({
             </div>
             <div className="card stack" style={{ background: "var(--panel-2)", padding: 12, gap: 10 }}>
               <strong style={{ fontSize: 14 }}>Baixar</strong>
-              {logoUrl ? (
+              {hasLogo ? (
                 <div className="row">
-                  <select value={pos} onChange={(e) => setPos(e.target.value as LogoPos)} style={{ width: 230 }}>
+                  <select value={pos} onChange={(e) => setPos(e.target.value as LogoPos)} style={{ width: 260 }}>
                     {(Object.keys(LOGO_POS_LABEL) as LogoPos[]).map((k) => (
                       <option key={k} value={k}>{LOGO_POS_LABEL[k]}</option>
                     ))}
                   </select>
+                  {pos !== "none" && logos.length > 1 && (
+                    <select value={logoPick} onChange={(e) => setLogoPick(e.target.value)} style={{ width: 200 }}>
+                      <option value="auto">Versão: melhor contraste</option>
+                      {logos.map((l) => (
+                        <option key={l.url} value={l.url}>{l.name}</option>
+                      ))}
+                    </select>
+                  )}
                   {pos !== "none" && (
                     <label className="row" style={{ margin: 0, gap: 6 }}>
                       Tamanho
@@ -264,6 +297,11 @@ function Detail({
                 </div>
               ) : (
                 <div style={{ fontSize: 13, color: "var(--muted)" }}>Suba o logo do cliente em Identidade visual para aplicar no download.</div>
+              )}
+              {hasLogo && pos !== "none" && logos.length === 1 && (
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                  Dica: suba também uma versão clara e uma escura do logo — o automático escolhe a que aparece melhor em cada imagem.
+                </div>
               )}
               <div className="row">
                 <button className="ghost small" disabled={!url || dl} onClick={() => download("feed")}>↓ Feed 1080×1350</button>

@@ -20,11 +20,12 @@ ${
 - Escreva no prompt cada texto entre aspas duplas exatamente como deve aparecer, dizendo o papel (headline, apoio, selo/CTA) e a posição (ex.: "headline at top-left, bold sans-serif, white").
 - Hierarquia clara: no máximo 1 headline + 1 linha de apoio + 1 selo/CTA curto. Tipografia sem serifa, legível, coerente com a tipografia da marca; cores da paleta HEX.
 - Peça um texto nítido e sem erros: "render the Portuguese text exactly as written, correct accents, no extra words, no misspellings".
-- LOGO: não desenhe nenhum logo (o logo real é aplicado depois pelo sistema). Reserve uma área limpa para ele e diga onde (ex.: "keep a clean empty area at bottom-center for the logo").
+- LOGO: não desenhe nenhum logo (o logo real é aplicado depois pelo sistema, na posição informada). Nessa posição deixe uma área de FUNDO LISO E ESCURO OU CLARO UNIFORME (cor sólida da paleta, sem foto, sem objeto, sem textura, sem texto), com ~30% da largura da arte, e diga isso no prompt (ex.: "keep the bottom-right corner (about 30% of the width) as an empty flat solid dark green area, no objects, no text — reserved for the logo"). Componha a foto e os textos para não invadirem essa área.
 - Stories 9:16: textos e logo fora dos 14% de cima e 20% de baixo. Feed: margens seguras de ~6%.`
     : `IMAGEM BASE:
 - SEM texto, letras, números, logos ou marca d'água. Reserve espaço negativo limpo para o texto que entra depois.
-- Stories 9:16: deixar ~15% do topo e ~20% da base livres. Feed: espaço limpo num lado ou no terço superior.`
+- Stories 9:16: deixar ~15% do topo e ~20% da base livres. Feed: espaço limpo num lado ou no terço superior.
+- Se houver posição do logo, deixe também essa área com fundo liso.`
 }
 ${
   isHealth
@@ -49,6 +50,7 @@ export type DirectorInput = {
   storyCount: number;
   modelSeesImages: boolean;
   withText: boolean;
+  logoArea?: string;
 };
 
 const isHealthClient = (c: Client) =>
@@ -68,6 +70,7 @@ Briefing: ${i.brief}
 
 Peças (se o briefing não listar as suas): ${i.feedCount} de Feed (4:5) e ${i.storyCount} de Stories (9:16).
 Modo: ${i.withText ? "ARTE FINAL COM TEXTO" : "IMAGEM BASE SEM TEXTO"}.
+Posição do logo (reservar área lisa): ${!i.logoArea || i.logoArea === "none" ? "sem logo" : i.logoArea}.
 Modelo de imagem ${i.modelSeesImages ? "RECEBE as referências como imagem; diga no prompt o papel de cada uma (image 1, image 2...)." : "NÃO recebe as referências (só texto); descreva o estilo delas no prompt."}
 
 Referências anexadas, na ordem:

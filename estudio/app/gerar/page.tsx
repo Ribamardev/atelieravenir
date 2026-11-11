@@ -27,6 +27,7 @@ function Generate() {
   const [storyCount, setStoryCount] = useState(2);
   const [variations, setVariations] = useState(1);
   const [withText, setWithText] = useState(true);
+  const [logoArea, setLogoArea] = useState("bottom-right");
   const [pieces, setPieces] = useState<PlannedPiece[] | null>(null);
   const [busy, setBusy] = useState<"" | "plan" | "gen">("");
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +91,7 @@ function Generate() {
     const res = await fetch("/api/plan", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ clientId, referenceIds: selected, brief, feedCount, storyCount, modelId, withText }),
+      body: JSON.stringify({ clientId, referenceIds: selected, brief, feedCount, storyCount, modelId, withText, logoArea }),
     });
     const body = await res.json();
     setBusy("");
@@ -167,6 +168,19 @@ function Generate() {
               ? "A IA escreve os textos do briefing na arte. O logo real entra no download."
               : "Imagem sem texto, para diagramar depois."}
           </span>
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <label style={{ margin: 0 }}>Espaço do logo na arte</label>
+          <select value={logoArea} onChange={(e) => setLogoArea(e.target.value)} style={{ width: 220 }}>
+            <option value="bottom-right">Embaixo à direita</option>
+            <option value="bottom-left">Embaixo à esquerda</option>
+            <option value="bottom-center">Embaixo no centro</option>
+            <option value="top-right">Em cima à direita</option>
+            <option value="top-left">Em cima à esquerda</option>
+            <option value="top-center">Em cima no centro</option>
+            <option value="none">Sem logo</option>
+          </select>
+          <span style={{ fontSize: 13, color: "var(--muted)" }}>A IA deixa esse canto com fundo liso; no download o logo cai ali sozinho.</span>
         </div>
         {listsPieces && (
           <div className="note">O briefing lista as peças: o diretor de arte vai criar exatamente essas, ignorando as quantidades abaixo.</div>
